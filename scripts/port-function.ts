@@ -25,7 +25,9 @@ function swapImports(src: string, depth: 'shared' | 'function'): string {
   return src
     .replace(/from\s+['"]npm:@base44\/sdk[^'"]*['"]/g, `from '${runtime}'`)
     .replace(/from\s+['"]base44:runtime['"]/g, `from '${runtime}'`)
-    .replace(/from\s+['"]\.\.\/\.\.\/shared\/([^'"]+)['"]/g, "from '../_shared/$1'");
+    .replace(/from\s+['"]\.\.\/\.\.\/shared\/([^'"]+)['"]/g, "from '../_shared/$1'")
+    // dynamic imports: await import('../../shared/x.ts')
+    .replace(/import\(\s*['"]\.\.\/\.\.\/shared\/([^'"]+)['"]\s*\)/g, "import('../_shared/$1')");
 }
 
 async function exists(p: string) { try { await Deno.stat(p); return true; } catch { return false; } }
