@@ -40,4 +40,4 @@ if [ -z "${TEST_DATABASE_URL:-}" ]; then
 fi
 
 cd "$ROOT"
-deno test -A --no-check=remote supabase/functions/_shared/ "$@"
+deno test -A --no-check=remote --config supabase/functions/deno.json supabase/functions/_shared/ supabase/functions/_tests/ "$@"
