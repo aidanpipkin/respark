@@ -7,7 +7,7 @@
 //   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_DB_URL   (injected by Supabase)
 //   APP_URL                 public web app origin, stands in for the x-base44-app-url header
 //   PLATFORM_OWNER_EMAIL    identity reported by auth.me() for service-role (cron) calls
-//   CRON_SECRET             shared secret pg_cron sends as x-cron-secret (Vault `cron_secret`); same identity as the service role
+//   CRON_SECRET (optional)  overrides the Vault `cron_secret` that pg_cron sends as x-cron-secret; same identity as the service role
 //   RESEND_API_KEY, FROM_EMAIL                     SendEmail
 //   ANTHROPIC_API_KEY, LLM_MODEL (optional)        InvokeLLM
 //   STORAGE_BUCKET (default "uploads")             CreateFileSignedUrl / UploadFile
@@ -96,6 +96,21 @@ export type User = { id: string; email: string; full_name: string; role: 'admin'
 
 const SYSTEM_USER = (): User => ({ id: 'service-role', email: (Deno.env.get('PLATFORM_OWNER_EMAIL') || '').toLowerCase(), full_name: 'System', role: 'admin', roles: ['admin'], service_role: true });
 
+// The cron secret lives in Vault (`cron_secret`, created by migration 0002 with a random value), so it never has to be
+// copied anywhere by hand. CRON_SECRET in the function environment overrides it (local tests).
+let cronSecretCache: { value: string; at: number } | null = null;
+async function cronSecretValue(): Promise<string> {
+  const override = Deno.env.get('CRON_SECRET') || '';
+  if (override) return override;
+  if (cronSecretCache && Date.now() - cronSecretCache.at < 10 * 60000) return cronSecretCache.value;
+  try {
+    const rows = await getSql()`select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret' limit 1`;
+    const value = String((rows[0] as { decrypted_secret?: string } | undefined)?.decrypted_secret || '');
+    cronSecretCache = { value, at: Date.now() };
+    return value;
+  } catch { return ''; }
+}
+
 function timingSafeEqual(a: string, b: string): boolean {
   let out = 0;
   for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -105,9 +120,11 @@ function timingSafeEqual(a: string, b: string): boolean {
 async function resolveUser(req: Request): Promise<User | null> {
   // pg_cron / Postgres triggers identify themselves with a shared secret (Vault `cron_secret` = env `CRON_SECRET`)
   // instead of carrying the service role key through the database.
-  const cronSecret = Deno.env.get('CRON_SECRET') || '';
   const sent = req.headers.get('x-cron-secret') || '';
-  if (cronSecret && sent && sent.length === cronSecret.length && timingSafeEqual(sent, cronSecret)) return SYSTEM_USER();
+  if (sent) {
+    const cronSecret = await cronSecretValue();
+    if (cronSecret && sent.length === cronSecret.length && timingSafeEqual(sent, cronSecret)) return SYSTEM_USER();
+  }
   const token = bearer(req);
   if (!token) return null;
   // Cron (pg_cron / scheduled functions) and function-to-function calls send the service role key.

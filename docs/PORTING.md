@@ -69,7 +69,7 @@ Deploy with `--no-verify-jwt` for every function that is called without a Supaba
 
 ## 2. How cron reaches a function
 
-`0002_cron_and_triggers.sql` schedules pg_cron jobs that run `public.invoke_edge_function('<name>', body)`, which `net.http_post`s to `${project_url}/functions/v1/<name>` with the header `x-cron-secret: <cron_secret>` read from Vault (the same value is the edge function secret `CRON_SECRET`). `auth.me()` matches it and returns the platform admin, so `adminContext(req)` passes. The same path backs the booked-appointment trigger (`appointmentJourney` with `{appointment_id}`) and `functions.invoke` between functions (`sequenceSender` fans out to itself per agent, `dailyBrief` continues with a cursor).
+`0002_cron_and_triggers.sql` schedules pg_cron jobs that run `public.invoke_edge_function('<name>', body)`, which `net.http_post`s to `${project_url}/functions/v1/<name>` with the header `x-cron-secret: <cron_secret>` read from Vault; the functions read the same Vault entry back (`CRON_SECRET` can override it). `auth.me()` matches it and returns the platform admin, so `adminContext(req)` passes. The same path backs the booked-appointment trigger (`appointmentJourney` with `{appointment_id}`) and `functions.invoke` between functions (`sequenceSender` fans out to itself per agent, `dailyBrief` continues with a cursor).
 
 pg_cron runs in UTC. The three daily jobs are scheduled at their CDT hour (8:00 Chicago → 13:00 UTC); they drift an hour in winter. Change the cron expressions if that matters.
 
@@ -89,7 +89,7 @@ TEST_DATABASE_URL=... scripts/test.sh # against your own disposable database
 ## 5. What a human has to do in the Supabase dashboard
 
 1. Create the project; run the migrations (`supabase db push` or paste `0001` then `0002`).
-2. Vault: `select vault.create_secret('https://<ref>.supabase.co', 'project_url'); select vault.create_secret('<long random string>', 'cron_secret');` and set the edge function secret `CRON_SECRET` to the same string (required by `0002`).
+2. Vault: `select vault.create_secret('https://<ref>.supabase.co', 'project_url'); ` (required by `0002`, which also generates the `cron_secret` Vault entry itself).
 3. Edge Function secrets: every name listed under *Secrets* above.
 4. Storage: create the bucket named in `STORAGE_BUCKET` (default `uploads`); public read if logos/headshots are served publicly, otherwise signed URLs are used.
 5. Auth: enable email (magic link / invite) sign-in, set the Site URL to `APP_URL`, add redirect URLs. Invite the platform owner first (their email must equal `platform_settings.owner_email` to be made admin by the trigger), then agents via `inviteAgent` or the dashboard. Promote extra admins: `update public.profiles set role = 'admin' where email = '…'`.

@@ -1,12 +1,15 @@
 -- Schedules the Base44 workflows as pg_cron jobs and replaces the one live entity trigger
 -- ("Appointment Booked Journey") with a Postgres trigger. Both call edge functions over pg_net
--- with a shared cron secret (header x-cron-secret), which runtime.ts maps to the platform admin.
+-- with a shared cron secret (header x-cron-secret) that runtime.ts reads back from Vault and maps
+-- to the platform admin. The secret is generated here; nothing has to be copied by hand.
 --
--- Before applying, store two secrets in Vault (Dashboard → Integrations → Vault → Secrets, or SQL):
+-- Before applying, store the project URL in Vault (Dashboard → Integrations → Vault, or SQL):
 --   select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
---   select vault.create_secret('<long random string>', 'cron_secret');   -- same value as the edge function secret CRON_SECRET
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
+
+-- Random cron secret, created once (re-running keeps the existing one).
+select vault.create_secret(encode(gen_random_bytes(32), 'hex'), 'cron_secret') where not exists (select 1 from vault.secrets where name = 'cron_secret');
 
 create or replace function public.invoke_edge_function(fn text, body jsonb default '{}'::jsonb) returns bigint
 language plpgsql security definer set search_path = public as $$
