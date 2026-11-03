@@ -1,7 +1,10 @@
 // Fresh-lead webhook. Forms, landing pages, Zapier and lead vendors POST new leads to
-//   ${SUPABASE_URL}/functions/v1/leadWebhook?key=<agent key>   (Base44: https://<app>/functions/leadWebhook)
-// as JSON or form data. Each lead becomes a contact, is enrolled in the agent's chosen campaign and,
-// with documented consent, gets the opening text right away.
+//   ${SUPABASE_URL}/functions/v1/leadWebhook?key=<agent key>              generic JSON or form fields (Base44: https://<app>/functions/leadWebhook)
+//   ${SUPABASE_URL}/functions/v1/leadWebhook?key=<agent key>&vendor=closr  Closr Tech / Closrleads deliveries
+//   ${SUPABASE_URL}/functions/v1/leadWebhook?key=<agent key>&vendor=goat   GOAT Leads deliveries
+// (leadWebhookSettings returns the exact URLs). Each lead becomes a contact, is enrolled in the agent's
+// chosen campaign and, with documented consent, gets the opening text right away. Vendor payloads are
+// mapped onto the generic fields by _shared/vendorLeads.ts.
 import { createClientFromRequest } from '../_shared/runtime.ts';
 import { resilient } from '../_shared/entityRetry.ts';
 import { waitUntil } from '../_shared/runtime.ts';
@@ -10,6 +13,7 @@ import { e164 } from '../_shared/smsTransport.ts';
 import { businessName } from '../_shared/publicSite.ts';
 import { intakeLead, clean, consentRecordFor, writeConsentRecords } from '../_shared/leadIntake.ts';
 import { runSequenceLead } from '../_shared/messageSequence.ts';
+import { adaptVendor, VENDORS, VENDOR_LABEL, type Vendor } from '../_shared/vendorLeads.ts';
 
 const PER_HOUR = 300;
 const pick = (o: any, ...keys: string[]) => { const lower: Record<string, any> = {}; for (const [k, v] of Object.entries(o || {})) lower[k.toLowerCase().replace(/[\s-]/g, '_')] = v; for (const k of keys) { const v = o[k] ?? lower[k.toLowerCase()]; if (v !== undefined && v !== null && typeof v !== 'object' && String(v).trim()) return String(v); } return ''; };
@@ -57,6 +61,8 @@ export function normalize(body: any) {
       occupation: pick(body, 'occupation', 'job', 'employment'),
       prior_notes: pick(body, 'notes', 'note'),
     },
+    // Extra form answers (vendor adapters): kept on the lead as facts.extra after the private-column filter.
+    extra: body?.extra && typeof body.extra === 'object' && !Array.isArray(body.extra) ? body.extra : undefined,
   };
 }
 
@@ -71,6 +77,17 @@ export default async function (req: Request) {
     const type = req.headers.get('content-type') || '';
     try { body = type.includes('application/x-www-form-urlencoded') ? Object.fromEntries(new URLSearchParams(raw)) : JSON.parse(raw || '{}'); } catch { return Response.json({ error: 'Send JSON or form data.' }, { status: 400 }); }
     if (Array.isArray(body)) body = body[0] || {};
+    // Vendor adapter: map the vendor's payload shape onto the generic fields first.
+    const vendorParam = (url.searchParams.get('vendor') || '').toLowerCase().trim();
+    let vendor: Vendor | '' = '';
+    let vendorFresh = true;
+    if (vendorParam) {
+      if (!(VENDORS as readonly string[]).includes(vendorParam)) return Response.json({ error: `Unknown vendor. Use one of: ${VENDORS.join(', ')}.` }, { status: 400 });
+      const adapted = adaptVendor(vendorParam, body)!;
+      if (adapted.test) return Response.json({ ok: true, test: true, vendor: adapted.vendor, note: 'Test delivery parsed; nothing was created.' });
+      if (!adapted.generic.phone) return Response.json({ ok: true, note: 'Empty or connectivity-check payload, nothing to process.' });
+      vendor = adapted.vendor; vendorFresh = adapted.fresh; body = adapted.generic;
+    }
     if (body.contact && typeof body.contact === 'object') body = { ...body, ...body.contact };
 
     const base44 = resilient(createClientFromRequest(req));
@@ -92,8 +109,10 @@ export default async function (req: Request) {
       ? [lead.consent_wording, lead.consent_url && `Page: ${clean(lead.consent_url, 300)}`, lead.consent_ip && `IP: ${clean(lead.consent_ip, 60)}`].filter(Boolean).join(' · ')
       : '';
     const intake = {
-      campaign, source: lead.consented ? 'Lead webhook (consent captured)' : 'Lead webhook (no consent)', consentText, seller, batch: `webhook:${receivedAt.slice(0, 10)}`,
-      leadSource: clean(lead.lead_source, 120) || 'Lead webhook', tags: ['respark-webhook'], consentDate: (lead.consent_date && Number.isFinite(Date.parse(lead.consent_date)) ? new Date(lead.consent_date) : new Date()).toISOString().slice(0, 10),
+      campaign, source: vendor ? `${VENDOR_LABEL[vendor]} webhook (vendor consent)` : lead.consented ? 'Lead webhook (consent captured)' : 'Lead webhook (no consent)', consentText, seller,
+      // Aged vendor leads are not "fresh": they wait for the next send window instead of getting the instant opener.
+      batch: vendor ? `${vendorFresh ? 'webhook' : 'vendor-aged'}:${vendor}:${receivedAt.slice(0, 10)}` : `webhook:${receivedAt.slice(0, 10)}`,
+      leadSource: clean(lead.lead_source, 120) || 'Lead webhook', tags: ['respark-webhook', ...(vendor ? [`vendor-${vendor}`] : [])], consentDate: (lead.consent_date && Number.isFinite(Date.parse(lead.consent_date)) ? new Date(lead.consent_date) : new Date()).toISOString().slice(0, 10),
       // Without the flag plus wording the lead is kept but never texted (status closed, reported as held: "Consent flag missing").
       consented: lead.consented, dncBasis: lead.consented ? 'written_consent' : '',
     };
@@ -102,17 +121,17 @@ export default async function (req: Request) {
     // Proof of consent for this submission: what the form sent, from where, received when.
     if (lead.consented && result.lead_id && ['imported', 'held'].includes(result.status)) {
       await writeConsentRecords(E, [consentRecordFor(s, result, intake, {
-        basis: 'webhook', attested_by: `webhook:${key.slice(0, 8)}`, attested_at: receivedAt, location_id: s.location_id || '',
+        basis: 'webhook', attested_by: vendor ? `vendor:${vendor}:${key.slice(0, 8)}` : `webhook:${key.slice(0, 8)}`, attested_at: receivedAt, location_id: s.location_id || '',
         ip: clean(lead.consent_ip, 60) || (req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || '').split(',')[0].trim().slice(0, 64),
         user_agent: (req.headers.get('user-agent') || '').slice(0, 200), page_url: clean(lead.consent_url, 300),
       })]);
     }
 
     // Speed to lead: write and send the opener now instead of waiting for the next scheduled run.
-    if (result.status === 'imported' && result.lead_id && campaign.status === 'active' && s.status === 'live') {
+    if (vendorFresh && result.status === 'imported' && result.lead_id && campaign.status === 'active' && s.status === 'live') {
       waitUntil((async () => { try { const fresh = await E.Lead.get(result.lead_id); await runSequenceLead(base44, s, fresh, campaign); } catch { /* the scheduled sender retries */ } })());
     }
-    return Response.json({ ok: true, status: result.status, reason: (result as any).reason || '', lead_id: result.lead_id || null });
+    return Response.json({ ok: true, status: result.status, reason: (result as any).reason || '', lead_id: result.lead_id || null, ...(vendor ? { vendor } : {}) });
   } catch (error) {
     return Response.json({ error: String((error as Error).message || 'Could not accept the lead.').slice(0, 200) }, { status: 400 });
   }
