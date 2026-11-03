@@ -16,6 +16,16 @@ export function tableName(entity) {
     .toLowerCase();
 }
 
+// Tables whose rows agents read through an owner-scoped `v_<table>` view
+// (supabase/migrations/0001_schema.sql); the table itself is admin-only.
+export const VIEW_TABLES = new Set(['a2p_registration', 'agent_settings', 'ai_draft', 'appointment', 'billing_account', 'calendar_connection', 'campaign', 'consent_record', 'control_audit', 'conversation_summary', 'credit_transaction', 'lead', 'message_log', 'prompt_version', 'provisioning_task', 'sequence_step', 'stats_snapshot']);
+
+/** Relation to read an entity from: the `v_` view when the backend scopes reads through one, else the table. */
+export function readRelation(entity) {
+  const table = tableName(entity);
+  return VIEW_TABLES.has(table) ? `v_${table}` : table;
+}
+
 /** Field path -> PostgREST column reference. `meta.plan` → `meta->>plan`. */
 export function columnRef(path) {
   const parts = String(path).split('.');
@@ -44,7 +54,8 @@ export function quoteValue(v) {
 }
 
 const listValue = arr => '(' + arr.map(quoteValue).join(',') + ')';
-const arrayLiteral = arr => '{' + arr.map(quoteValue).join(',') + '}';
+// Base44 array fields are jsonb columns in Postgres: containment takes a JSON array.
+const arrayLiteral = arr => JSON.stringify(arr);
 
 const SIMPLE_META = /[\^$.*+?()[\]{}|\\]/;
 
@@ -84,7 +95,8 @@ const leaf = (col, op, value, list) => ({ col, op, value, list });
 const group = (kind, items) => (items.length === 1 && kind !== 'not.or' ? items[0] : { kind, items });
 
 function renderLeaf(n, quoted) {
-  const v = n.list !== undefined ? n.list : quoted ? quoteValue(n.value) : raw(n.value);
+  // `in.(...)` lists are already PostgREST syntax; JSON literals (jsonb containment) need quoting inside logic strings.
+  const v = n.list !== undefined ? (quoted && /^[[{]/.test(n.list) ? quoteValue(n.list) : n.list) : quoted ? quoteValue(n.value) : raw(n.value);
   return `${n.col}.${n.op}.${v}`;
 }
 

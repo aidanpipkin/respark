@@ -2,7 +2,7 @@
 // Keeps the `base44.auth / entities / functions / integrations` surface the
 // rest of src/ already uses, so call sites did not have to change.
 import { createClient } from '@supabase/supabase-js';
-import { applyQuery, cursorFilter, encodeCursor, orderOptions, selectList, tableName } from '@/api/query';
+import { applyQuery, cursorFilter, encodeCursor, orderOptions, readRelation, selectList, tableName } from '@/api/query';
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '');
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -173,13 +173,16 @@ const auth = {
 
 function entity(name) {
   const table = tableName(name);
-  const from = () => supabase.from(table);
+  const view = readRelation(name);
+  const from = () => supabase.from(table); // writes
+  const read = () => supabase.from(view); // reads: the owner-scoped view when there is one
   return {
     table,
+    view,
     /** `{ items, has_more, next_cursor }` with keyset pagination. */
     async filter(query = {}, { sort, limit = 50, cursor, fields } = {}) {
       const { column, ascending } = orderOptions(sort);
-      let q = from().select(selectList(fields));
+      let q = read().select(selectList(fields));
       q = applyQuery(q, query);
       const after = cursorFilter(cursor, sort);
       if (after) q = q.or(after);
@@ -196,13 +199,13 @@ function entity(name) {
     },
     async list(options) { return this.filter({}, options); },
     async get(id) {
-      const { data, error } = await from().select('*').eq('id', id).maybeSingle();
+      const { data, error } = await read().select('*').eq('id', id).maybeSingle();
       if (error) throw fromSupabaseError(error);
       if (!data) throw httpError(`${name} not found`, 404, { error: 'Not found' });
       return data;
     },
     async count(query = {}) {
-      let q = from().select('id', { count: 'exact', head: true });
+      let q = read().select('id', { count: 'exact', head: true });
       q = applyQuery(q, query);
       const { count, error } = await q;
       if (error) throw fromSupabaseError(error);
