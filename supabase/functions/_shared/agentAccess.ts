@@ -2,7 +2,7 @@ import { context, agentSettings } from './ghl.ts';
 export async function adminContext(req) {
  const ctx = await context(req); if (ctx.user.role !== 'admin') throw Object.assign(new Error('Administrator access required.'), { status: 403 }); return ctx;
 }
-export async function actingSettings(base44, user, input = {}) {
+export async function actingSettings(base44, user, input: any = {}) {
  if (input.agent_email && user.role !== 'admin' && input.agent_email !== user.email) throw new Error('Access denied.');
  const settings = await agentSettings(base44, user.role === 'admin' && input.agent_email ? input.agent_email : user.email);
  if (!settings) throw new Error('Your account is awaiting setup. Please contact your administrator.'); return settings;

@@ -25,7 +25,7 @@ export function own(user, record) {
   if (!record || (user.role !== 'admin' && record.agent_email !== user.email)) throw new Error('Access denied.');
   return record;
 }
-export async function ghl(settings, path, method = 'GET', body) {
+export async function ghl(settings: any, path: string, method = 'GET', body?: any): Promise<any> {
   if (!settings?.ghl_token || !settings?.location_id || !settings.connected) throw new Error('Your messaging connection is not ready. Please contact your administrator.');
   // GHL allows ~100 requests per 10s per location. A 429 means nothing was processed, so it is always
   // safe to wait and retry; other server errors are retried only for reads (a send must never double).
