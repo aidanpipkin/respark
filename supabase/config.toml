@@ -1,0 +1,47 @@
+# Supabase CLI / GitHub-integration config for the production project (ref xteheymihhnsgpsxulcg).
+# Functions listed with verify_jwt = false are called without a Supabase user token and do their own
+# authentication (webhook signatures, URL keys, OAuth state, or the x-cron-secret header from pg_cron).
+project_id = "xteheymihhnsgpsxulcg"
+
+[functions]
+# Shared code lives in _shared; every function imports it relatively, so no per-function import map is needed.
+
+# Webhooks, OAuth callbacks and public endpoints
+[functions.twilioWebhook]
+verify_jwt = false
+[functions.ghlWebhook]
+verify_jwt = false
+[functions.leadWebhook]
+verify_jwt = false
+[functions.stripeWebhook]
+verify_jwt = false
+[functions.ghlOAuth]
+verify_jwt = false
+[functions.msOAuth]
+verify_jwt = false
+[functions.submitGetInfo]
+verify_jwt = false
+[functions.getPublicSite]
+verify_jwt = false
+[functions.publicDemo]
+verify_jwt = false
+[functions.calendarInvite]
+verify_jwt = false
+
+# pg_cron / trigger targets (authenticated by x-cron-secret, see migration *_cron_and_triggers.sql)
+[functions.sequenceSender]
+verify_jwt = false
+[functions.appointmentReminders]
+verify_jwt = false
+[functions.health]
+verify_jwt = false
+[functions.a2pAdvance]
+verify_jwt = false
+[functions.dailyBrief]
+verify_jwt = false
+[functions.adminSubscriptions]
+verify_jwt = false
+[functions.adminTwilio]
+verify_jwt = false
+[functions.appointmentJourney]
+verify_jwt = false

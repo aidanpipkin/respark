@@ -1,0 +1,39 @@
+# Deploys the Supabase side on every push to master: migrations (supabase/migrations) and all edge
+# functions (supabase/functions/*, with verify_jwt from supabase/config.toml).
+#
+# Repository secrets (GitHub → Settings → Secrets and variables → Actions):
+#   SUPABASE_ACCESS_TOKEN   personal access token from https://supabase.com/dashboard/account/tokens
+#   SUPABASE_DB_PASSWORD    the project's database password (Dashboard → Project Settings → Database)
+# The project ref is read from supabase/config.toml.
+name: Supabase deploy
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/supabase-deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: xteheymihhnsgpsxulcg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link project
+        run: supabase link --project-ref "$PROJECT_REF"
+      - name: Apply migrations
+        run: supabase db push --include-all
+      - name: Deploy edge functions
+        run: supabase functions deploy --project-ref "$PROJECT_REF"
