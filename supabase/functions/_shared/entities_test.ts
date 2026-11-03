@@ -2,8 +2,8 @@
 // Needs TEST_DATABASE_URL pointing at a database where 0001_schema.sql has been applied.
 import { deepStrictEqual, ok, rejects } from 'node:assert/strict';
 
-const assert = (v: unknown, msg?: string) => ok(v, msg);
-const assertEquals = (a: unknown, b: unknown, msg?: string) => deepStrictEqual(a, b, msg);
+const assert = (v: unknown, msg?: string) => (msg === undefined ? ok(v) : ok(v, msg));
+const assertEquals = (a: unknown, b: unknown, msg?: string) => (msg === undefined ? deepStrictEqual(a, b) : deepStrictEqual(a, b, msg));
 // Like std's assertRejects: optional error class and message substring; resolves with the error.
 async function assertRejects(fn: () => Promise<unknown>, _cls?: unknown, includes?: string): Promise<unknown> {
   let caught: unknown;

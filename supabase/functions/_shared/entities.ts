@@ -51,6 +51,10 @@ export function getSql(): Sql {
   if (!shared) shared = connect();
   return shared;
 }
+export async function closeSql(): Promise<void> {
+  const s = shared; shared = undefined;
+  if (s) await s.end({ timeout: 5 });
+}
 
 // ---------------------------------------------------------------------------
 // Query compiler

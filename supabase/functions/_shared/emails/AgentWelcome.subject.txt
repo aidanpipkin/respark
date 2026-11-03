@@ -1,0 +1,1 @@
+Your workspace is ready, {{first_name}}

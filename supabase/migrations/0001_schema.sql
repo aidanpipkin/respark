@@ -32,7 +32,8 @@ begin
   -- The platform owner (PlatformSettings.owner_email) is an admin from the first sign-in; everyone else is an agent.
   select exists(select 1 from public.platform_settings where lower(owner_email) = lower(new.email)) into owner;
   insert into public.profiles (id, email, full_name, role)
-  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', ''), case when owner then 'admin' else 'agent' end)
+  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', ''),
+          case when owner then 'admin' when new.raw_user_meta_data->>'role' in ('agent', 'user') then new.raw_user_meta_data->>'role' else 'agent' end)
   on conflict (id) do update set email = excluded.email;
   return new;
 end $$;
