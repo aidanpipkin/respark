@@ -23,7 +23,7 @@ export async function ensurePublicSlug(E: any, s: any) {
 export function appOrigin(req: Request) {
   const header = req.headers.get('x-base44-app-url');
   if (header && /^https:\/\//.test(header)) return new URL(header).origin;
-  return 'https://respark-pipkingroup.com';
+  return (Deno.env.get('APP_URL') || 'https://respark-pipkingroup.com').replace(/\/$/, '');
 }
 
 export function siteLinks(origin: string, slug: string) {

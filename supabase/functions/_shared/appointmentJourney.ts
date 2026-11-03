@@ -19,8 +19,10 @@ import { textAgent, emailAgent, agentAwake } from './agentNotify.ts';
 import { platformConfig } from './credits.ts';
 import { logMessage } from './messageJobs.ts';
 import { DEFAULT_MODEL } from './sequenceWriter.ts';
+import { functionUrl } from './runtime.ts';
 
-export const APP_ORIGIN = 'https://respark-pipkingroup.com';
+// Public web app origin for links in texts and emails: APP_URL on Supabase, the Base44 domain as the legacy fallback.
+export const APP_ORIGIN = (Deno.env.get('APP_URL') || 'https://respark-pipkingroup.com').replace(/\/$/, '');
 export const BUYERS_GUIDE = { id: 'naic-buyers-guide', name: "Life Insurance Buyer's Guide (NAIC)", url: 'https://content.naic.org/sites/default/files/publication-lig-lp-consumer-life.pdf', products: ['all'], active: true };
 const CALL_MINUTES = 20;
 const MIN = 60000, H = 3600000, DAY = 86400000;
@@ -58,7 +60,9 @@ export function googleLink(appt: any, s: any, who: 'lead' | 'agent') {
   const q = new URLSearchParams({ action: 'TEMPLATE', text: who === 'lead' ? `Call with ${s.display_name || first(s)}` : `Call ${appt.lead_name || 'lead'}`, dates: `${icsDate(start)}/${icsDate(start + CALL_MINUTES * MIN)}`, details: who === 'lead' ? `${first(s)} will call you${s.phone_number ? ` from ${pretty(s.phone_number)}` : ''}.${s.meeting_link ? ` Or join by video: ${s.meeting_link}` : ''}` : `Call ${pretty(appt.phone_to_call)}${s.meeting_link ? ` / video: ${s.meeting_link}` : ''}`, ...(s.meeting_link ? { location: s.meeting_link } : {}) });
   return `https://calendar.google.com/calendar/render?${q}`;
 }
-export function inviteUrl(origin: string, appt: any, who: 'lead' | 'agent') { return `${origin}/functions/calendarInvite?a=${encodeURIComponent(appt.id)}&t=${encodeURIComponent(appt.invite_token)}&w=${who}`; }
+// Base44 served functions under the app origin; on Supabase the public calendarInvite function has its own URL.
+function calendarInviteBase(origin: string) { try { return functionUrl('calendarInvite'); } catch { return `${origin}/functions/calendarInvite`; } }
+export function inviteUrl(origin: string, appt: any, who: 'lead' | 'agent') { return `${calendarInviteBase(origin)}?a=${encodeURIComponent(appt.id)}&t=${encodeURIComponent(appt.invite_token)}&w=${who}`; }
 
 // ---------- AI-personalized parts ----------
 const introSchema = { type: 'object', properties: { lead_recap: { type: 'string' }, call_focus: { type: 'string' }, agent_brief: { type: 'array', items: { type: 'string' } }, suggested_opener: { type: 'string' } }, required: ['lead_recap', 'call_focus', 'agent_brief', 'suggested_opener'] };

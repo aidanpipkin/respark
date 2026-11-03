@@ -7,7 +7,7 @@
 //
 // Older workspaces that were connected with a pasted private-integration token
 // (token_kind 'pit') keep working unchanged.
-import { secrets } from './runtime.ts';
+import { secrets, functionUrl } from './runtime.ts';
 
 const API = 'https://services.leadconnectorhq.com';
 const KEY = 'ghl_agency';
@@ -37,7 +37,8 @@ export async function credentialRecord(base44: any) {
   return page.items[0] || null;
 }
 
-export function redirectUri(origin: string) { return new URL('/functions/ghlOAuth', origin).toString(); }
+// The OAuth redirect is the public ghlOAuth edge function (Base44 served it under the app origin; Supabase at /functions/v1).
+export function redirectUri(origin: string) { try { return functionUrl('ghlOAuth'); } catch { return new URL('/functions/ghlOAuth', origin).toString(); } }
 
 // Exchange the code GHL sends after the agency installs the app.
 export async function exchangeCode(base44: any, code: string, redirect: string) {
