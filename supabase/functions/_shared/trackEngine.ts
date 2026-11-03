@@ -10,7 +10,7 @@ import { freeSlots, spreadSlots } from './messageBooking.ts';
 import { clockOpen, nextWindow, labelSlot } from './messageClock.ts';
 import { claimJob, finishJob, logMessage } from './messageJobs.ts';
 import { afterSeries } from './followUpSchedule.ts';
-import { TRACKS, TRACK_STEPS, TRACK_LABEL, TRACK_GOAL, DAY, nextStep, serviceText, trackTextCheck, fallbackTrackText } from './tracks.ts';
+import { TRACKS, TRACK_STEPS, TRACK_LABEL, TRACK_GOAL, DAY, nextStep, serviceText, serviceCheck, trackTextCheck, fallbackTrackText, verbatimTrackText } from './tracks.ts';
 import type { Planned } from './tracks.ts';
 
 const schema = { type: 'object', properties: { text: { type: 'string' }, angle: { type: 'string' } }, required: ['text', 'angle'] };
@@ -75,14 +75,23 @@ export async function runTrackLead(base44: any, s: any, lead: any, campaign: any
   if (!step) { await advanceTrack(E, lead, policy, '__end__'); return { skipped: 'track finished' }; }
   if (step.due > Date.now()) { await E.Lead.update(lead.id, { track_next_at: new Date(step.due).toISOString() }); return { skipped: 'not due' }; }
   const tz = lead.timezone || s.home_timezone || 'America/Chicago';
-  // Exact service texts may go any permitted hour; AI texts use the send windows.
-  const windowed = !step.template;
+  // Exact service texts and agent-written (verbatim) texts may go any permitted hour; AI texts use the send windows.
+  const windowed = !step.template && !step.text;
   if (!clockOpen(s, tz, windowed)) { await E.Lead.update(lead.id, { track_next_at: nextWindow(s, tz, Date.now() + 300000, windowed) }); return { skipped: 'sending window' }; }
   const key = `track:${lead.id}:${lead.track}:${step.key}:${lead.track_started_at || ''}`;
 
   if (step.template) {
     const text = serviceText(step.template, lead, policy, s);
     const r = await sendSms(base44, lead.id, text, 'service', key, { automatic: true });
+    if (r.sent) await advanceTrack(E, await E.Lead.get(lead.id), policy, step.key);
+    return r;
+  }
+  // Agent-written copy (e.g. the Approval Recovery drip): sent as written, like a service text, never rewritten.
+  if (step.text) {
+    const text = verbatimTrackText(step, lead, policy || await policyFor(E, lead), s);
+    const check = serviceCheck(text);
+    if (!check.passed || /\{[^}]+\}/.test(text)) throw new Error(`Track text failed checks: ${check.flags.join(', ') || 'unfilled placeholder'}`);
+    const r = await sendSms(base44, lead.id, text, 'track', key, { automatic: true });
     if (r.sent) await advanceTrack(E, await E.Lead.get(lead.id), policy, step.key);
     return r;
   }
