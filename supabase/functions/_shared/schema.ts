@@ -190,14 +190,18 @@ export const ENTITIES: Record<string, EntityMeta> = {
       "tag_ids": "jsonb",
       "chat_widget_id": "text",
       "test_phone_numbers": "jsonb",
-      "token_kind": "text"
+      "token_kind": "text",
+      "ms_refresh_token": "text",
+      "ms_connected_email": "text",
+      "ms_connected_at": "text"
     },
     "hidden": [
       "agent_ghl_user_id",
       "ghl_token",
       "ghl_token_expires_at",
       "location_id",
-      "token_kind"
+      "token_kind",
+      "ms_refresh_token"
     ],
     "ownerField": "agent_email",
     "required": [
@@ -275,7 +279,8 @@ export const ENTITIES: Record<string, EntityMeta> = {
       "phone_to_call": "text",
       "reminders_sent": "jsonb",
       "start_time": "text",
-      "status": "text"
+      "status": "text",
+      "ms_event_id": "text"
     },
     "hidden": [
       "ghl_appointment_id",
@@ -424,7 +429,8 @@ export const ENTITIES: Record<string, EntityMeta> = {
       "stage_ids": "jsonb",
       "status": "text",
       "system_prompt": "text",
-      "writer_prompt": "text"
+      "writer_prompt": "text",
+      "send_rules": "jsonb"
     },
     "hidden": [
       "ghl_tag",
@@ -1118,7 +1124,10 @@ export const ENTITIES: Record<string, EntityMeta> = {
       "location_id": "text",
       "requires_step1_delivered": "boolean",
       "step_number": "double precision",
-      "variant": "text"
+      "variant": "text",
+      "verbatim": "boolean",
+      "offset_minutes": "double precision",
+      "fresh_only": "boolean"
     },
     "hidden": [
       "location_id"
