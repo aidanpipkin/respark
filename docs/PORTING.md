@@ -6,6 +6,7 @@ What exists already:
 |---|---|---|
 | Postgres schema, indexes, RLS, `profiles` | `supabase/migrations/0001_schema.sql` | Generated from `legacy_base44/entities/*.jsonc` by `scripts/gen-schema.ts`; edit the generator or the jsonc, never the SQL. |
 | Crons and the booked-appointment trigger | `supabase/migrations/0002_cron_and_triggers.sql` | pg_cron + pg_net; needs two Vault secrets (below). |
+| Legacy Respark fold-in columns (verbatim steps, campaign send rules, Microsoft 365 connection) | `supabase/migrations/0003_legacy_respark_fold_in.sql` | Hand-written; `schema.ts` edited to match. See `docs/LEGACY_RESPARK_FOLD_IN.md`. |
 | Base44 entity SDK on Postgres | `supabase/functions/_shared/entities.ts` | `filter/list/get/create/bulkCreate/update/bulkUpdate/updateMany/upsert/count/delete/deleteMany`, Mongo-style queries, cursors. |
 | Base44 runtime (`createClientFromRequest`, `secrets`, `waitUntil`, integrations) | `supabase/functions/_shared/runtime.ts` | Also `serve()` (CORS + Deno.serve) and `corsHeaders`. |
 | Column metadata used by the adapter | `supabase/functions/_shared/schema.ts` | Generated; `ENTITIES[name] = {table, columns, hidden, ownerField}`. |
@@ -44,8 +45,9 @@ Nothing else in the handler needs to change for the common cases:
 - **Entities.** `base44.asServiceRole.entities.X` is unrestricted. `base44.entities.X` is scoped to the signed-in user: non-admins only see rows with their `agent_email`, never see `"rls": {"read": false}` fields, and rows they create are stamped with their email. Both forms of `filter` are supported: `filter(query, { sort, limit, cursor, fields, skip })` → `{ items, has_more, next_cursor }`, and `filter(query, '-created_date', 1)` → array (used for `User`).
 - **`User`** maps to `public.profiles` (`id` is the auth uuid, `email`, `full_name`, `role`). `base44.users.inviteUser(email)` calls `auth.admin.inviteUserByEmail`.
 - **Integrations.** `SendEmail({to, subject, body, from_name})` or `SendEmail({to, template_name, variables})` → Resend. `InvokeLLM({prompt, response_json_schema})` → Anthropic Messages API, structured output via a forced tool call. `CreateFileSignedUrl({file_uri})` / `UploadFile({file})` → Supabase Storage bucket `STORAGE_BUCKET`. `functions.invoke(name, body)` → `POST ${SUPABASE_URL}/functions/v1/<name>` with the service key, returns `{ data, status }`.
+- **Webhook addresses shown in the UI.** Base44 served functions under the app origin (`${app}/functions/<name>`); Supabase serves them at `${SUPABASE_URL}/functions/v1/<name>`. `runtime.functionUrl(name)` builds the public address (`FUNCTIONS_URL` overrides the base); `adminGhl` (webhook_url), `adminMessaging` (webhook) and `leadWebhookSettings` use it. `ghlAuth.redirectUri` (the GHL OAuth redirect shown by `adminGhl` and used by `ghlOAuth`) still derives from the app origin; whoever ports `ghlOAuth` should move it to `functionUrl('ghlOAuth')` on both sides at once.
 - **`waitUntil(p)`** uses `EdgeRuntime.waitUntil` when present (deployed), otherwise lets the promise run and logs a rejection.
-- **Secrets** come from `Deno.env` (set them in Dashboard → Edge Functions → Secrets). The names are unchanged: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PUBLISHABLE_KEY`, `RESPARK_WEBHOOK_SECRET`, `RESPARK_GHL_AGENCY_TOKEN`, `GHL_CLIENT_SECRET`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `GOOGLE_OAUTH_CLIENT_SECRET`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `LLM_MODEL`, `LLM_WRITER_MODEL`. New: `RESEND_API_KEY`, `FROM_EMAIL`, `APP_URL`, `PLATFORM_OWNER_EMAIL`, `STORAGE_BUCKET`, `CORS_ORIGIN`. Injected by Supabase: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`.
+- **Secrets** come from `Deno.env` (set them in Dashboard → Edge Functions → Secrets). The names are unchanged: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PUBLISHABLE_KEY`, `RESPARK_WEBHOOK_SECRET`, `RESPARK_GHL_AGENCY_TOKEN`, `GHL_CLIENT_SECRET`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `GOOGLE_OAUTH_CLIENT_SECRET`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `LLM_MODEL`, `LLM_WRITER_MODEL`. New: `RESEND_API_KEY`, `FROM_EMAIL`, `APP_URL`, `PLATFORM_OWNER_EMAIL`, `STORAGE_BUCKET`, `CORS_ORIGIN`, `FUNCTIONS_URL` (optional; public base for webhook addresses shown to admins/agents, default `${SUPABASE_URL}/functions/v1`), `MS_CLIENT_ID` / `MS_CLIENT_SECRET` / `MS_TENANT` (optional, Microsoft 365 calendar). Injected by Supabase: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`.
 
 Then:
 
@@ -126,7 +128,7 @@ Trigger legend: **cron** (workflow schedule, now pg_cron in `0002`), **webhook**
 | calls | UI | setupContext | Twilio voice |
 | campaignProgress | UI | context(req) | |
 | checkConnection | UI | context(req) | |
-| commandCenter | UI (admin) | adminContext | |
+| commandCenter | UI (admin) | adminContext | The Admin Command page (`web/src/pages/AdminCommand.jsx`); there is no separate `adminCommand` function |
 | contactNotes | UI | context(req) | |
 | conversationControl | UI | context(req) | |
 | createSetupIntent | UI | setupContext | Stripe |
@@ -142,9 +144,10 @@ Trigger legend: **cron** (workflow schedule, now pg_cron in `0002`), **webhook**
 | inbox | UI | setupContext | |
 | inviteAgent | UI (admin) | setup(req) | uses `users.inviteUser` |
 | launch | UI | setupContext | |
-| leadWebhook | webhook (vendors / Zapier, key in URL) | none (own key check) | `--no-verify-jwt` |
+| leadWebhook | webhook (vendors / Zapier, key in URL) | none (own key check) | `--no-verify-jwt`; `?vendor=closr` / `?vendor=goat` adapters (`_shared/vendorLeads.ts`) |
 | leadWebhookSettings | UI | setupContext | |
 | leads | UI | setupContext | |
+| msOAuth | UI (`{action}`) + webhook (Microsoft OAuth redirect, GET) | setupContext / HMAC state | New in the port; `--no-verify-jwt`; see `docs/LEGACY_RESPARK_FOLD_IN.md` |
 | numbers | UI | setupContext | Twilio, Stripe |
 | outcomes | UI | setupContext | |
 | playbooks | UI | setupContext | |
@@ -185,4 +188,5 @@ Retired workflows with condition `false` (Agent Attention Alert, Agent Go Live W
 
 - `_shared/messageBooking.ts` (`bookSlot`): the Base44 source assigns `attempted = true` without ever declaring `attempted`, so every booking through that path threw `ReferenceError` inside the try and again in the catch. The ported copy declares it (`let attempted = false`). Nothing else in `_shared/` was changed.
 - `_shared/llm.ts` still prefers `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` from the environment and only falls back to `integrations.Core.InvokeLLM` (now also Anthropic). Its default model string (`claude-sonnet-5-5`) comes from the legacy code; set `LLM_MODEL` to the model you actually want.
+- `scripts/test.sh` applies every migration except `0002` (pg_cron/pg_net) and runs `supabase/functions/_shared/` plus `supabase/functions/_tests/` (end-to-end tests that drive the ported handlers as plain Requests with a mocked fetch).
 - `_shared/entityRetry.ts` retries on Base44 rate-limit messages. Harmless on Postgres (the adapter never raises them) and still useful for transient connection errors.
