@@ -4,9 +4,9 @@ What exists already:
 
 | Piece | Where | Notes |
 |---|---|---|
-| Postgres schema, indexes, RLS, `profiles` | `supabase/migrations/0001_schema.sql` | Generated from `legacy_base44/entities/*.jsonc` by `scripts/gen-schema.ts`; edit the generator or the jsonc, never the SQL. |
-| Crons and the booked-appointment trigger | `supabase/migrations/0002_cron_and_triggers.sql` | pg_cron + pg_net; needs two Vault secrets (below). |
-| Legacy Respark fold-in columns (verbatim steps, campaign send rules, Microsoft 365 connection) | `supabase/migrations/0003_legacy_respark_fold_in.sql` | Hand-written; `schema.ts` edited to match. See `docs/LEGACY_RESPARK_FOLD_IN.md`. |
+| Postgres schema, indexes, RLS, `profiles` | `supabase/migrations/20261103233730..20261103234418_schema_part*.sql` | Generated from `legacy_base44/entities/*.jsonc` by `scripts/gen-schema.ts`; edit the generator or the jsonc, never the SQL. |
+| Crons and the booked-appointment trigger | `supabase/migrations/20261103234618_cron_and_triggers.sql` | pg_cron + pg_net; needs the `project_url` Vault secret (below). |
+| Legacy Respark fold-in columns (verbatim steps, campaign send rules, Microsoft 365 connection) | `supabase/migrations/20261103234440_legacy_respark_fold_in.sql` | Hand-written; `schema.ts` edited to match. See `docs/LEGACY_RESPARK_FOLD_IN.md`. |
 | Base44 entity SDK on Postgres | `supabase/functions/_shared/entities.ts` | `filter/list/get/create/bulkCreate/update/bulkUpdate/updateMany/upsert/count/delete/deleteMany`, Mongo-style queries, cursors. |
 | Base44 runtime (`createClientFromRequest`, `secrets`, `waitUntil`, integrations) | `supabase/functions/_shared/runtime.ts` | Also `serve()` (CORS + Deno.serve) and `corsHeaders`. |
 | Column metadata used by the adapter | `supabase/functions/_shared/schema.ts` | Generated; `ENTITIES[name] = {table, columns, hidden, ownerField}`. |

@@ -1,4 +1,6 @@
-// Generates supabase/migrations/0001_schema.sql and supabase/functions/_shared/schema.ts
+// Generates supabase/migrations/<version>_schema.sql and supabase/functions/_shared/schema.ts.
+// The production project already has the schema applied as five parts (20261103233730..20261103234418); a regenerated
+// file is for a fresh project or a diff, not for re-applying over the live one.
 // from the Base44 entity schemas in legacy_base44/entities/*.jsonc.
 //
 //   deno run -A scripts/gen-schema.ts
@@ -11,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ENTITIES_DIR = join(ROOT, 'legacy_base44', 'entities');
-const SQL_OUT = join(ROOT, 'supabase', 'migrations', '0001_schema.sql');
+const SQL_OUT = join(ROOT, 'supabase', 'migrations', Deno.env.get('SCHEMA_OUT') || '00000000000000_schema_regenerated.sql');
 const TS_OUT = join(ROOT, 'supabase', 'functions', '_shared', 'schema.ts');
 
 type Prop = { type?: string | string[]; enum?: unknown[]; default?: unknown; description?: string; items?: Prop; rls?: { read?: boolean; write?: boolean }; format?: string };

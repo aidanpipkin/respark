@@ -19,7 +19,7 @@ uses. This file says what went where, what was left behind on purpose, and how t
 | `resparkBooking.ts` (Outlook via the Base44 "outlook" connector) | `_shared/msGraph.ts`, new function `msOAuth`, hooks in `_shared/availability.ts`, `availability`, `_shared/appointmentJourney.ts`, `_shared/agentBooking.ts` | Behind `MS_CLIENT_ID` / `MS_CLIENT_SECRET` (+ optional `MS_TENANT`, default `common`). Each agent connects their own mailbox; refresh token on `agent_settings.ms_refresh_token` (hidden). Outlook busy times join the ICS-link busy source; a booked call creates an Outlook event with the lead invited (when they have an email), removed on cancel and replaced on reschedule. Migration `0003`. |
 | 3-per-24h cap, STOP handling, "never text a closed client", takeover pause | Already product rules (`messageSequence.MAX_PER_24H`, `guardrails.stopRequested`, client track, `status_before_takeover`) | Nothing to port. |
 
-### Schema (migration `0003_legacy_respark_fold_in.sql`)
+### Schema (migration `20261103234440_legacy_respark_fold_in.sql`)
 
 `sequence_step.verbatim`, `sequence_step.offset_minutes`, `sequence_step.fresh_only`, `campaign.send_rules`,
 `agent_settings.ms_refresh_token` (hidden), `ms_connected_email`, `ms_connected_at`, `appointment.ms_event_id`.
@@ -94,7 +94,7 @@ ids. Re-running updates in place.
 
 ## Deploy / dashboard steps added by this fold-in
 
-1. Apply `supabase/migrations/0003_legacy_respark_fold_in.sql`.
+1. Apply `supabase/migrations/20261103234440_legacy_respark_fold_in.sql`.
 2. Deploy `msOAuth` with `--no-verify-jwt` (the Microsoft callback carries no user token); `leadWebhook` is
    already `--no-verify-jwt`.
 3. For Microsoft 365: register an Azure app (delegated `Calendars.ReadWrite`, `User.Read`, `offline_access`),

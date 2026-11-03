@@ -21,6 +21,9 @@ alter table public.agent_settings add column if not exists "ms_connected_at" tex
 
 alter table public.appointment add column if not exists "ms_event_id" text;
 
+-- completeRegistration writes A2PRegistration.licensed_states, never declared in the Base44 jsonc.
+alter table public.a2p_registration add column if not exists "licensed_states" jsonb;
+
 -- Views: the new agent-visible columns are appended (create or replace view only allows appending).
 create or replace view public.v_sequence_step with (security_barrier) as
   select "id", "created_date", "updated_date", "created_by_id", "is_sample", "agent_email", "cadence", "slot", "kind", "body", "brief", "campaign_id", "day_offset", "lever", "requires_step1_delivered", "step_number", "variant", "verbatim", "offset_minutes", "fresh_only" from public.sequence_step where agent_email = public.jwt_email() or public.is_admin();
