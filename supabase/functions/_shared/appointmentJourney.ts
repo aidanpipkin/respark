@@ -20,6 +20,7 @@ import { platformConfig } from './credits.ts';
 import { logMessage } from './messageJobs.ts';
 import { DEFAULT_MODEL } from './sequenceWriter.ts';
 import { functionUrl } from './runtime.ts';
+import { msConnected, graphCreateEvent, graphDeleteEvent } from './msGraph.ts';
 
 // Public web app origin for links in texts and emails: APP_URL on Supabase, the Base44 domain as the legacy fallback.
 export const APP_ORIGIN = (Deno.env.get('APP_URL') || 'https://respark-pipkingroup.com').replace(/\/$/, '');
@@ -242,8 +243,32 @@ export async function onBooked(base44: any, appointmentId: string, origin: strin
   const leadStatus = await sendLeadEmail(s, lead, moved ? `Updated time: ${le.subject}` : le.subject, le.html, docs, base44);
   const agentStatus = await emailAgent(base44, s, `${moved ? 'Call moved' : 'Call booked'}: ${appt.lead_name || 'Lead'}, ${labelSlot(appt.start_time, tz)}`, agentEmailText(appt, s, lead, p, origin, profile));
   await E.Appointment.update(appt.id, { email_status: { lead: leadStatus, agent: agentStatus }, ai_summary: appt.ai_summary || lead.ai_summary || '' });
-  await logMessage(base44, s, lead, { event_type: 'appointment_journey', source: 'engine', direction: 'internal', status: 'booked', body: `Booking sent: agent text ${agentText.sent ? 'sent' : (agentText as any).deferred ? 'in morning agenda' : 'skipped'}, lead email ${leadStatus}, agent email ${agentStatus}.` });
-  return { agent_text: agentText, lead_email: leadStatus, agent_email: agentStatus };
+  // 3) Outlook event on the agent's Microsoft 365 calendar, with the lead invited (only when connected).
+  const outlook = await outlookEvent(E, s, appt, lead, le, moved);
+  await logMessage(base44, s, lead, { event_type: 'appointment_journey', source: 'engine', direction: 'internal', status: 'booked', body: `Booking sent: agent text ${agentText.sent ? 'sent' : (agentText as any).deferred ? 'in morning agenda' : 'skipped'}, lead email ${leadStatus}, agent email ${agentStatus}${outlook ? `, Outlook event ${outlook}` : ''}.` });
+  return { agent_text: agentText, lead_email: leadStatus, agent_email: agentStatus, ...(outlook ? { outlook } : {}) };
+}
+
+/**
+ * Creates (or, after a move, replaces) the Outlook event for a booking when the agent connected Microsoft 365.
+ * The lead is invited when they have an email address. Returns a short status word, or '' when not connected.
+ */
+async function outlookEvent(E: any, s: any, appt: any, lead: any, le: { subject: string; html: string }, moved: boolean) {
+  if (!msConnected(s)) return '';
+  try {
+    if (moved && appt.ms_event_id) await graphDeleteEvent(E, s, appt.ms_event_id).catch(() => {});
+    const start = Date.parse(appt.start_time);
+    const email = String(lead.email || '').trim();
+    const invited = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+    const id = await graphCreateEvent(E, s, {
+      subject: `Call with ${appt.lead_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || pretty(appt.phone_to_call || lead.phone)}`,
+      html: le.html, start: new Date(start).toISOString(), end: new Date(start + CALL_MINUTES * MIN).toISOString(),
+      location: s.meeting_link || `Phone call: ${pretty(appt.phone_to_call || lead.phone)}`,
+      attendee: invited ? { email, name: appt.lead_name || lead.first_name || '' } : null,
+    });
+    await E.Appointment.update(appt.id, { ms_event_id: id });
+    return invited ? 'created, lead invited' : 'created';
+  } catch (e) { return `failed (${String((e as Error).message).slice(0, 120)})`; }
 }
 
 // ---------- Scheduled steps ----------
@@ -334,7 +359,7 @@ export async function runJourney(base44: any, origin: string, deadline = Date.no
           if ((r as any).sent) out.sent++; else out.skipped++;
         }
       }
-    } catch (e) { out.failed++; }
+    } catch (e) { out.failed++; console.error('[journey] appointment', appt.id, (e as Error)?.message || e); }
   }
   out.agendas = await morningAgendas(base44, origin, all, settings);
   return out;

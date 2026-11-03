@@ -4,6 +4,7 @@
 //  - busy times come from the agent's private calendar link (Google, Outlook or iCloud "iCal/ICS"
 //    address), so nobody has to connect a calendar anywhere else.
 import { zonedMidnight, localParts } from './messageClock.ts';
+import { msConnected, graphBusy } from './msGraph.ts';
 
 const DAY = 86400000;
 const HORIZON_DAYS = 15;
@@ -108,24 +109,35 @@ export function parseIcs(text: string, fallbackTz: string, from = Date.now(), da
   return busy.slice(0, 1000);
 }
 
-/** Busy intervals from the agent's calendar link, cached for 10 minutes. Never throws. */
+/**
+ * Busy intervals from the agent's calendar link and, when connected, their Microsoft 365 calendar
+ * (Graph), cached together for 10 minutes. Never throws.
+ */
 export async function busyIntervals(E: any, s: any, force = false): Promise<{ busy: Array<[number, number]>; error: string; fetched_at: string }> {
-  if (!s.busy_calendar_url) return { busy: [], error: '', fetched_at: '' };
+  const graphOn = msConnected(s);
+  if (!s.busy_calendar_url && !graphOn) return { busy: [], error: '', fetched_at: '' };
   const cache = s.busy_cache || {};
   if (!force && cache.fetched_at && Date.now() - Date.parse(cache.fetched_at) < CACHE_MS) {
     return { busy: (cache.busy || []).map((b: string[]) => [Date.parse(b[0]), Date.parse(b[1])]), error: cache.error || '', fetched_at: cache.fetched_at };
   }
-  let busy: Array<[number, number]> = [], error = '';
-  try {
-    const res = await fetch(normalizeFeedUrl(s.busy_calendar_url), { headers: { Accept: 'text/calendar' }, redirect: 'follow', signal: AbortSignal.timeout(12000) });
-    if (!res.ok) throw new Error(res.status === 404 || res.status === 401 || res.status === 403 ? 'The calendar link no longer works. Paste a fresh private link.' : `Calendar link returned ${res.status}.`);
-    const text = (await res.text()).slice(0, 8_000_000);
-    if (!/BEGIN:VCALENDAR/.test(text)) throw new Error('That link is not a calendar (ICS) feed.');
-    busy = parseIcs(text, s.home_timezone || 'America/Chicago');
-  } catch (e) {
-    error = (e as Error).message.slice(0, 200);
-    busy = (cache.busy || []).map((b: string[]) => [Date.parse(b[0]), Date.parse(b[1])]); // keep last known busy times
+  let busy: Array<[number, number]> = [];
+  const errors: string[] = [];
+  let failed = false;
+  if (s.busy_calendar_url) {
+    try {
+      const res = await fetch(normalizeFeedUrl(s.busy_calendar_url), { headers: { Accept: 'text/calendar' }, redirect: 'follow', signal: AbortSignal.timeout(12000) });
+      if (!res.ok) throw new Error(res.status === 404 || res.status === 401 || res.status === 403 ? 'The calendar link no longer works. Paste a fresh private link.' : `Calendar link returned ${res.status}.`);
+      const text = (await res.text()).slice(0, 8_000_000);
+      if (!/BEGIN:VCALENDAR/.test(text)) throw new Error('That link is not a calendar (ICS) feed.');
+      busy = parseIcs(text, s.home_timezone || 'America/Chicago');
+    } catch (e) { errors.push((e as Error).message.slice(0, 200)); failed = true; }
   }
+  if (graphOn) {
+    try { busy = busy.concat(await graphBusy(E, s, Date.now(), Date.now() + HORIZON_DAYS * DAY)); }
+    catch (e) { errors.push(`Microsoft 365: ${(e as Error).message.slice(0, 160)}`); failed = true; }
+  }
+  const error = errors.join(' ');
+  if (failed && !busy.length) busy = (cache.busy || []).map((b: string[]) => [Date.parse(b[0]), Date.parse(b[1])]); // keep last known busy times
   const fetched_at = new Date().toISOString();
   await E.AgentSettings.update(s.id, { busy_cache: { fetched_at, error, busy: busy.slice(0, 500).map(([a, b]) => [new Date(a).toISOString(), new Date(b).toISOString()]) } }).catch(() => {});
   return { busy, error, fetched_at };

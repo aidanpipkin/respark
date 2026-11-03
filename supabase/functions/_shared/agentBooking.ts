@@ -5,6 +5,7 @@ import { freeSlots, replaceRescheduled, startJourney } from './messageBooking.ts
 import { labelSlot, dayBounds } from './messageClock.ts';
 import { logMessage } from './messageJobs.ts';
 import { sendSms } from './messageSender.ts';
+import { msConnected, graphDeleteEvent } from './msGraph.ts';
 
 const LENGTH_MS = 20 * 60000;
 
@@ -56,6 +57,7 @@ export async function agentReschedule(base44: any, s: any, appointment: any, slo
 export async function agentCancel(base44: any, s: any, appointment: any, handBack: boolean) {
   const E = base44.asServiceRole.entities;
   await calendarUpdate(s, appointment.ghl_appointment_id, { appointmentStatus: 'cancelled' });
+  if (appointment.ms_event_id && msConnected(s)) await graphDeleteEvent(E, s, appointment.ms_event_id).catch(() => {});
   await E.Appointment.update(appointment.id, { status: 'cancelled' });
   const lead = await E.Lead.get(appointment.lead_id);
   if (lead.status !== 'opted_out') {

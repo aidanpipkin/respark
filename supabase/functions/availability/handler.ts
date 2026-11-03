@@ -5,6 +5,7 @@ import { ghl, own, failure } from '../_shared/ghl.ts';
 import { freeSlots } from '../_shared/messageBooking.ts';
 import { busyIntervals, normalizeFeedUrl, validHours, openHoursFor } from '../_shared/availability.ts';
 import { agentBook, agentReschedule, agentCancel, agentMarkOutcome } from '../_shared/agentBooking.ts';
+import { msConfigured, msConnected } from '../_shared/msGraph.ts';
 
 const DEFAULT_HOURS = [...[1, 2, 3, 4, 5].map(day => ({ day, open: '09:00', close: '18:00' })), { day: 6, open: '10:00', close: '14:00' }];
 
@@ -20,6 +21,10 @@ function view(s: any) {
     busy_checked_at: cache.fetched_at || '',
     busy_error: cache.error || '',
     busy_blocks_next_two_weeks: (cache.busy || []).length,
+    // Microsoft 365 (Outlook) as a second busy source and booking target; connect/disconnect through msOAuth.
+    ms_available: msConfigured(),
+    ms_connected: msConnected(s),
+    ms_email: msConnected(s) ? s.ms_connected_email || '' : '',
     calendar_ready: !!s.calendar_id,
     meeting_link: s.meeting_link || '',
   };
