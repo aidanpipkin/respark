@@ -169,6 +169,10 @@ Deno.test({ name: 'engine end to end', sanitizeOps: false, sanitizeResources: fa
     // A second run finds nothing due.
     const again = await json(await sequenceSender(asCron({ agent_email: AGENT })));
     deepStrictEqual(again.sent, 0);
+    // Dispatcher mode (what the */5 cron calls) sees the agent through test_leads_at even before they are live.
+    deepStrictEqual(await json(await sequenceSender(asCron({ dry_run: true }))), { scanned_accounts: 1, has_more: false });
+    // Without the service key or a user, the cron entry point refuses.
+    deepStrictEqual((await sequenceSender(new Request('http://local/fn', { method: 'POST', body: '{}' }))).status, 400);
   });
 
   await t.step('simulateInbound "yes, what times" drafts an offer with two calendar slots (review mode)', async () => {
