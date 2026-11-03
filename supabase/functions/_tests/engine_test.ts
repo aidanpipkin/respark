@@ -131,10 +131,15 @@ Deno.test({ name: 'engine end to end', sanitizeOps: false, sanitizeResources: fa
     deepStrictEqual(campaign.name, 'Life Insurance Respark');
     deepStrictEqual(campaign.status, 'draft');
     const fresh = await E.Campaign.get(campaign.id);
-    deepStrictEqual(fresh.cadence, 'daily');
+    deepStrictEqual(fresh.cadence, 'standard');
     const steps = await E.SequenceStep.filter({ campaign_id: campaign.id }, { limit: 300 });
     ok(steps.items.length > 10, 'playbook installed its follow-up series');
     ok(steps.items.some((st: any) => st.step_number === 1 && st.variant === 'A' && st.cadence === 'daily'));
+    // Opening days are spaced out: standard is every other day after the opener, daily is one text a day.
+    const days = (c: string) => steps.items.filter((st: any) => st.cadence === c && st.variant !== 'B').sort((a: any, b: any) => a.step_number - b.step_number).map((st: any) => st.day_offset);
+    deepStrictEqual(days('standard').slice(0, 6), [0, 1, 3, 5, 7, 9]);
+    deepStrictEqual(days('daily').slice(0, 5), [0, 1, 2, 3, 4]);
+    ok(days('daily').every((d: number, i: number, arr: number[]) => i === 0 || d > arr[i - 1]), 'daily never doubles up');
   });
 
   await t.step('importLeads test_leads creates 4 queued test leads (one held, one duplicate)', async () => {

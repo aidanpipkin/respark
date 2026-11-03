@@ -19,7 +19,9 @@ import { isTestLead } from './rehearsal.ts';
 import { canSend } from './credits.ts';
 
 const DAY = 86400000;
-export const MAX_PER_24H = 3;
+// Cadence texts: at most one per lead per rolling 24 hours (the first days were landing too dense). Replies are not counted here;
+// state 3-per-24h rules for conversation replies live in aiReplyCore.
+export const MAX_PER_24H = 1;
 
 /** The cadence this lead runs on (fixed when they start, so switching a campaign never reshuffles a lead mid-series). */
 export const cadenceOf = (lead: any, campaign: any) => lead.cadence || campaign?.cadence || '';
@@ -82,9 +84,10 @@ async function nextStep(E: any, s: any, lead: any, campaign: any, cadence: strin
   const rules = campaign?.send_rules || null;
   const fresh = freshSeries(lead);
   const tz = lead.timezone || s.home_timezone || 'America/Chicago';
-  for (const step of items) {
-    // Same-day burst steps exist only for leads that just arrived; everyone else skips past them.
-    if (step.fresh_only === true && !fresh) continue;
+  // A step can exist as an aged row and a `fresh_only` row (different timing). Fresh leads take the fresh row when there is one;
+  // everyone else never sees fresh-only rows.
+  const track = items.filter((st: any) => fresh ? (st.fresh_only === true || !items.some((o: any) => o.step_number === st.step_number && o.fresh_only === true)) : st.fresh_only !== true);
+  for (const step of track) {
     // Fictional test leads run the series on a compressed clock (one step every 10 minutes, any hour), so an
     // agent can watch the whole thing the same day instead of over 60 days.
     if (isTestLead(lead)) return { step, at: new Date(Date.now() + 10 * 60000).toISOString(), skipped: 0 };
@@ -149,7 +152,7 @@ export async function runSequenceLead(base44: any, s: any, lead: any, campaign: 
   const number = (lead.current_step || 0) + 1;
   if (number > 1 && !lead.step1_delivered) return { skipped: 'awaiting opener delivery' };
 
-  // Never more than 3 texts in 24 hours to one person (Florida, Oklahoma, Maryland and Oregon law; good practice everywhere).
+  // Never more than one cadence text in 24 hours to one person (well inside the Florida/Oklahoma/Maryland/Oregon 3-a-day laws).
   const recent = test ? { count: 0, oldest: '' } : await recentSends(E, s, lead);
   if (recent.count >= MAX_PER_24H) {
     const free = Date.parse(recent.oldest) + DAY + 5 * 60000;

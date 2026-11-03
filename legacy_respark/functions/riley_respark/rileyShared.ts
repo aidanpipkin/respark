@@ -99,8 +99,8 @@ export function nextSendWindowStart(from: Date, tz: string, state?: string | nul
   }
   return scheduleLocal(from, 1, 9, 30, tz);
 }
-// Frequency cap: at most this many SEQUENCE texts to one lead in any rolling 24 hours (Florida/Oklahoma rule, applied everywhere).
-export const MAX_SEQ_TEXTS_PER_24H = 3;
+// Frequency cap: at most this many SEQUENCE texts to one lead in any rolling 24 hours (one a day; the day-0 burst was too much).
+export const MAX_SEQ_TEXTS_PER_24H = 1;
 export function seqTextsLast24h(conversation: any[], now: Date): Date[] {
   return (conversation || []).filter((m: any) => m.role === 'riley_sequence' && m.at && now.getTime() - new Date(m.at).getTime() < 86400000).map((m: any) => new Date(m.at)).sort((a: Date, b: Date) => a.getTime() - b.getTime());
 }

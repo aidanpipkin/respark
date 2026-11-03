@@ -64,7 +64,7 @@ Deno.serve(async (req: Request) => {
         if (!dryRun) await svc.update(L.id, { next_send_at: next.toISOString() });
         continue;
       }
-      // frequency cap: max 3 sequence texts per rolling 24h (FL/OK rule, applied to everyone)
+      // frequency cap: max MAX_SEQ_TEXTS_PER_24H sequence texts per rolling 24h
       const recent24 = seqTextsLast24h(L.conversation || [], now);
       if (!force && recent24.length >= MAX_SEQ_TEXTS_PER_24H) {
         let next = new Date(recent24[0].getTime() + 86400000 + 5 * 60000);

@@ -149,23 +149,24 @@ const CLOSE: Angle = { kind: 'close', lever: 'Door stays open', brief: 'Final, r
 // ---------------------------------------------------------------------------------------------
 // Cadences. day is days after the opener; slot is the local time window (am 10:00-12:00,
 // pm 2:30-5:30, both chosen to avoid the evening hours when opt-outs spike). Sundays and federal
-// holidays are skipped automatically, and no lead ever gets more than 3 texts in 24 hours.
+// holidays are skipped automatically, and no lead ever gets more than one cadence text a day.
+// Nov 3 2026: the first days were too dense (two a day on 'daily', three days in a row on
+// 'standard'). Now 'standard' opens with one text every other day and 'daily' is one a day.
 
 export type CadenceKey = 'daily' | 'standard';
 export const CADENCES: Record<CadenceKey, { label: string; description: string }> = {
-  daily: { label: 'Daily for 60 days', description: 'Two texts a day for the first 10 days, then one a day through day 60. Most touches, highest reply volume, highest opt-out and spam-filter risk.' },
-  standard: { label: 'Recommended (60 days)', description: 'About 20 texts over 60 days: daily at first, then tapering. Best results per text, lowest opt-out and spam-filter risk.' },
+  daily: { label: 'Daily (about 10 weeks)', description: 'One text a day, every day, for about 10 weeks. Most touches, highest reply volume, highest opt-out and spam-filter risk.' },
+  standard: { label: 'Recommended (60 days)', description: 'About 20 texts over 60 days: the opener, then every other day for two weeks, then tapering. Best results per text, lowest opt-out and spam-filter risk.' },
 };
 
 type Touch = { day: number; slot: 'am' | 'pm' };
 function dailyTouches(): Touch[] {
-  const t: Touch[] = [{ day: 0, slot: 'am' }];
-  for (let d = 1; d <= 9; d++) t.push({ day: d, slot: 'am' }, { day: d, slot: 'pm' });
-  for (let d = 10; d <= 59; d++) t.push({ day: d, slot: d % 2 ? 'pm' : 'am' });
+  const t: Touch[] = [];
+  for (let d = 0; d <= 68; d++) t.push({ day: d, slot: d % 2 ? 'pm' : 'am' });
   return t;
 }
 function standardTouches(): Touch[] {
-  const days = [0, 1, 2, 4, 5, 6, 8, 9, 12, 15, 18, 21, 24, 30, 36, 42, 48, 53, 57, 59];
+  const days = [0, 1, 3, 5, 7, 9, 11, 13, 15, 18, 21, 24, 27, 30, 36, 42, 48, 53, 57, 59];
   return days.map((day, i) => ({ day, slot: i % 3 === 2 ? 'pm' : 'am' }));
 }
 

@@ -34,10 +34,18 @@ export async function installPlaybook(E: any, s: any, key: string) {
   if (pb.send_rules && !campaign.send_rules) campaign = await E.Campaign.update(campaign.id, { send_rules: pb.send_rules });
   // Cadence playbooks install every cadence, so switching a campaign's cadence is instant.
   const wanted = sd.cadenceSteps ? [...sd.cadenceSteps('daily'), ...sd.cadenceSteps('standard')] : sd.sequence;
-  if (sd.cadenceSteps && !campaign.cadence) campaign = await E.Campaign.update(campaign.id, { cadence: sd.cadenceSteps('daily').length ? 'daily' : 'standard' });
+  if (sd.cadenceSteps && !campaign.cadence) campaign = await E.Campaign.update(campaign.id, { cadence: 'standard' });
   const steps = await E.SequenceStep.filter({ campaign_id: campaign.id }, { limit: 300 });
   const missing = wanted.filter((st: any) => !steps.items.some((v: any) => v.step_number === st.step_number && v.variant === st.variant && (v.cadence || '') === (st.cadence || '') && !!v.fresh_only === !!st.fresh_only));
   if (missing.length) await E.SequenceStep.bulkCreate(missing.map((st: any) => ({ ...scope(s), campaign_id: campaign.id, requires_step1_delivered: st.step_number > 1, ...st })));
+  // Timing follows the playbook: when a cadence's day offsets or slots change, existing steps move with it (wording is left alone).
+  let realigned = 0;
+  for (const st of wanted) {
+    if (!st.cadence) continue;
+    const v = steps.items.find((x: any) => x.step_number === st.step_number && x.variant === st.variant && (x.cadence || '') === st.cadence && !!x.fresh_only === !!st.fresh_only);
+    if (v && (v.day_offset !== st.day_offset || v.slot !== st.slot || (v.offset_minutes || 0) !== (st.offset_minutes || 0))) { await E.SequenceStep.update(v.id, { day_offset: st.day_offset, slot: st.slot, offset_minutes: st.offset_minutes || 0 }); realigned++; }
+  }
+  if (realigned) (campaign as any).realigned_steps = realigned;
   if (!(await E.PromptVersion.count({ campaign_id: campaign.id, version: campaign.prompt_version || sd.PROMPT_VERSION })))
     await E.PromptVersion.create({ ...scope(s), campaign_id: campaign.id, version: campaign.prompt_version || sd.PROMPT_VERSION, system_prompt: campaign.system_prompt, knowledge_doc: campaign.knowledge_doc, writer_prompt: campaign.writer_prompt || '', notes: `Installed from the ${pb.name} playbook.` });
   return campaign;

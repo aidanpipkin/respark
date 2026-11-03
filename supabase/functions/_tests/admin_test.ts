@@ -3,7 +3,7 @@
 //   health (service key, as pg_cron) → runs every check and writes heartbeat:health
 //   commandCenter → funnel/activity counts from the seeded rows
 //   leadWebhook ?vendor=closr / ?vendor=goat → Closr and GOAT payloads mapped onto the standard intake
-//   trucker_aidan playbook → verbatim steps skip the AI writer; fresh burst only for webhook leads; Sunday rules
+//   trucker_aidan playbook → verbatim steps skip the AI writer; fresh track (one a day) only for webhook leads; Sunday rules
 //   scripts/import-legacy-respark.ts → legacy ResparkLead rows become lead + message_log rows (idempotent)
 import { deepStrictEqual, ok, match } from 'node:assert/strict';
 
@@ -163,7 +163,7 @@ Deno.test({ name: 'admin group and legacy Respark fold-in', sanitizeOps: false, 
     ok(health2.results);
   });
 
-  await t.step("trucker_aidan playbook installs Aidan's copy verbatim with the fresh burst and Sunday rules", async () => {
+  await t.step("trucker_aidan playbook installs Aidan's copy verbatim, one text a day, with the fresh track and Sunday rules", async () => {
     s = await E.AgentSettings.update(s.id, { location_id: LOCATION, connected: true, ghl_token: 'ghl-test-token', status: 'live', a2p_status: 'approved', phone_number: '+19405550199' });
     const pb = PLAYBOOKS.find((p) => p.key === 'trucker_aidan')!;
     ok(pb && pb.persona === 'agent_first_person');
@@ -173,19 +173,28 @@ Deno.test({ name: 'admin group and legacy Respark fold-in', sanitizeOps: false, 
     deepStrictEqual(campaign.persona, 'agent_first_person');
     deepStrictEqual(campaign.send_rules, SEND_RULES);
     const steps = (await E.SequenceStep.filter({ campaign_id: campaign.id }, { sort: 'step_number', limit: 100 })).items;
-    deepStrictEqual(steps.length, 4 + 2 + 13);
+    // 4 openers + F2 + D2 (aged/fresh) + F3 + 12 series steps x (aged/fresh) = 4 + 1 + 2 + 1 + 24
+    deepStrictEqual(steps.length, 32);
     ok(steps.every((st: any) => st.verbatim === true && st.cadence === 'standard'));
+    ok(steps.every((st: any) => !st.offset_minutes), 'no same-day bursts any more');
     const openers = steps.filter((st: any) => st.step_number === 1);
     deepStrictEqual(openers.length, 4);
     deepStrictEqual(openers.filter((st: any) => st.fresh_only).length, 2);
-    const burst = steps.filter((st: any) => st.offset_minutes);
-    deepStrictEqual(burst.map((b: any) => [b.step_number, b.offset_minutes, b.fresh_only]), [[2, 20, true], [3, 240, true]]);
-    const d30 = steps.find((st: any) => st.kind === 'close');
-    deepStrictEqual(d30.day_offset, 29);
+    // Fresh track: opener d0, nudge d1, driver type d2, reply-YES d4, then the series two days behind the aged one. Never two in a day.
+    const freshDays = steps.filter((st: any) => st.fresh_only && st.variant !== 'B').map((st: any) => [st.step_number, st.day_offset]);
+    deepStrictEqual(freshDays.slice(0, 4), [[1, 0], [2, 1], [3, 2], [4, 4]]);
+    const agedDays = steps.filter((st: any) => !st.fresh_only && st.variant !== 'B').map((st: any) => st.day_offset);
+    deepStrictEqual(agedDays, [0, 1, 3, 5, 7, 9, 11, 13, 15, 18, 21, 24, 27, 30]);
+    for (const list of [freshDays.map((x: any) => x[1]), agedDays]) for (let i = 1; i < list.length; i++) ok(list[i] > list[i - 1], `one a day: ${list}`);
+    const d30 = steps.find((st: any) => st.kind === 'close' && !st.fresh_only);
+    deepStrictEqual(d30.day_offset, 30);
     match(d30.body, /^\{first\}, I'm about to close your file so I quit bugging you\./);
-    // Installing again adds nothing (fresh_only rows are recognised).
-    await installPlaybook(E, s, 'trucker_aidan');
-    deepStrictEqual((await E.SequenceStep.count({ campaign_id: campaign.id })), 19);
+    // Installing again adds nothing (fresh_only rows are recognised) and timing is re-aligned when the playbook moves.
+    await E.SequenceStep.update(d30.id, { day_offset: 29 });
+    const again = await installPlaybook(E, s, 'trucker_aidan');
+    deepStrictEqual((await E.SequenceStep.count({ campaign_id: campaign.id })), 32);
+    deepStrictEqual((again as any).realigned_steps, 1);
+    deepStrictEqual((await E.SequenceStep.get(d30.id)).day_offset, 30);
     // Sunday rule: allowed at 1pm in TX, never in AL; Saturday 7pm is inside Aidan's hours (product default would be closed).
     const sunday1pm = Date.parse('2026-11-08T19:00:00Z'); // Sunday 13:00 Chicago
     deepStrictEqual(cadenceOpen(s, 'America/Chicago', sunday1pm, SEND_RULES, 'TX'), true);
