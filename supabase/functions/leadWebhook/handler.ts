@@ -1,5 +1,5 @@
 // Fresh-lead webhook. Forms, landing pages, Zapier and lead vendors POST new leads to
-//   https://<app>/functions/leadWebhook?key=<agent key>
+//   ${SUPABASE_URL}/functions/v1/leadWebhook?key=<agent key>   (Base44: https://<app>/functions/leadWebhook)
 // as JSON or form data. Each lead becomes a contact, is enrolled in the agent's chosen campaign and,
 // with documented consent, gets the opening text right away.
 import { createClientFromRequest } from '../_shared/runtime.ts';
