@@ -1,0 +1,134 @@
+{
+  "name": "Appointment",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "ai_summary": {
+      "type": "string"
+    },
+    "booked_via": {
+      "type": "string"
+    },
+    "campaign_id": {
+      "type": "string"
+    },
+    "campaign_name": {
+      "type": "string"
+    },
+    "confirmation": {
+      "description": "Lead confirmation status for this call.",
+      "enum": [
+        "",
+        "pending",
+        "confirmed",
+        "reschedule"
+      ],
+      "type": "string"
+    },
+    "confirmed_at": {
+      "type": "string"
+    },
+    "email_status": {
+      "description": "{lead, agent}: sent | skipped:<reason> | failed:<reason>",
+      "type": "object"
+    },
+    "ghl_appointment_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "invite_token": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "journey": {
+      "description": "Which booking messages have gone out, keyed by step and start time.",
+      "type": "object"
+    },
+    "lead_id": {
+      "type": "string"
+    },
+    "lead_name": {
+      "type": "string"
+    },
+    "lead_timezone": {
+      "type": "string"
+    },
+    "location_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "outcome": {
+      "enum": [
+        "",
+        "no_show",
+        "follow_up",
+        "lost_banking",
+        "lost_social",
+        "closed"
+      ],
+      "type": "string"
+    },
+    "outcome_at": {
+      "type": "string"
+    },
+    "outcome_note": {
+      "type": "string"
+    },
+    "phone_to_call": {
+      "type": "string"
+    },
+    "reminders_sent": {
+      "type": "object"
+    },
+    "start_time": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "booked",
+        "held",
+        "no_show",
+        "rescheduled",
+        "cancelled"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "location_id"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false,
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

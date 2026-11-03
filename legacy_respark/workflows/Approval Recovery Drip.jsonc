@@ -1,0 +1,45 @@
+{
+  "name": "Approval Recovery Drip",
+  "description": "Every 15 minutes: auto-enrolls any open opportunity sitting in a \"Lost at Banking\" stage, sends the due approval-recovery texts in Aidan's voice (9am-7:30pm local), stops on any reply/DND/stage move and alerts Aidan.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/15 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "approval_recovery_drip",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_recovery": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "approvalRecovery",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Run approval recovery drip",
+            "description": "Enroll Lost at Banking opps, send due texts, catch replies"
+          }
+        }
+      }
+    ]
+  }
+}

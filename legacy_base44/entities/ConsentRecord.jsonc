@@ -1,0 +1,104 @@
+{
+  "name": "ConsentRecord",
+  "type": "object",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "lead_id": {
+      "type": "string"
+    },
+    "submission_id": {
+      "type": "string"
+    },
+    "ip": {
+      "type": "string"
+    },
+    "user_agent": {
+      "type": "string"
+    },
+    "page_url": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "consent_checked": {
+      "type": "boolean"
+    },
+    "consent_text": {
+      "type": "string"
+    },
+    "location_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "basis": {
+      "description": "How consent was documented: agent_attestation (CSV upload), web_form (hosted site), webhook (lead API).",
+      "enum": [
+        "agent_attestation",
+        "web_form",
+        "webhook"
+      ],
+      "type": "string"
+    },
+    "source": {
+      "description": "Where the lead came from, as chosen or sent at intake.",
+      "type": "string"
+    },
+    "wording": {
+      "description": "The consent language the person agreed to (per row when the file had one, else the attestation).",
+      "type": "string"
+    },
+    "consent_date": {
+      "description": "YYYY-MM-DD the person gave consent (per row when known, else the upload date).",
+      "type": "string"
+    },
+    "seller_named": {
+      "type": "string"
+    },
+    "attested_by": {
+      "description": "User email who attested, or the web form / webhook key that captured it.",
+      "type": "string"
+    },
+    "attested_at": {
+      "type": "string"
+    },
+    "batch_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "timestamp",
+    "consent_checked",
+    "consent_text"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

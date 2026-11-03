@@ -1,0 +1,14 @@
+const sections = [
+  ['Who this platform is for', 'Respark provides CRM and automation tools for insurance agents and agencies. It is not a consumer insurance marketplace and does not collect requests for insurance quotes through this website.'],
+  ['Information in your workspace', 'The platform processes agent account and business details, contact records, conversation history, consent records, campaign settings, appointments, and setup information supplied through the workspace. Basic usage and device information may also be collected when you use the platform.'],
+  ['How information is used', 'Information is used to operate the agent workspace, organize contacts, support follow-up and messaging, manage appointments and calendar connections, process authorized billing, maintain activity records, and help secure the service. Contact information and message content may be processed to generate AI-suggested replies.'],
+  ['Connected services', 'Messaging, AI, calendar, billing, and hosting providers process information needed to deliver the features you use. Connecting a service or enabling automation may cause relevant workspace information to be shared with that service.'],
+  ['Your contacts and consent', 'Agents are responsible for the contact information they add and for obtaining the permissions required to communicate with those contacts. Contact records are workspace data, not sign-ups for Respark marketing. Do not add sensitive information that is not needed for the workflow.'],
+  ['Access and security', 'Workspace access is subject to account permissions and administrator controls. No online service can guarantee complete security. Protect your login credentials and review access when your team changes.'],
+  ['Records and retention', 'CRM, messaging, consent, and audit records may need to be retained for operational and compliance purposes. Deletion requests may be subject to those obligations.'],
+  ['Questions and requests', 'For questions about personal information, account access, corrections, or deletion, contact your workspace administrator or the organization that provided your Respark access.'],
+  ['Changes', 'Updates to this policy will be posted on this page.'],
+];
+export default function PublicPrivacy() {
+  return <main className="mx-auto max-w-3xl px-6 py-14"><h1 className="page-title">Privacy Policy</h1><p className="mt-3 text-sm text-muted-foreground">Last updated: October 16, 2026</p><div className="mt-10 space-y-8">{sections.map(([title, text]) => <section key={title}><h2 className="text-lg font-semibold">{title}</h2><p className="mt-2 text-sm leading-7 text-muted-foreground">{text}</p></section>)}</div></main>;
+}

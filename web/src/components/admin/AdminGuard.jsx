@@ -1,0 +1,2 @@
+import { Navigate, Outlet, useOutletContext } from 'react-router-dom';
+export default function AdminGuard(){const context=useOutletContext();return context?.user?.role==='admin'?<Outlet context={context}/>:<Navigate to="/" replace/>;}

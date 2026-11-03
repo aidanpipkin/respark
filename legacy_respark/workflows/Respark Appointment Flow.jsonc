@@ -1,0 +1,45 @@
+{
+  "name": "Respark Appointment Flow",
+  "description": "Every 5 minutes: for booked Respark leads, sends the lead's reminder texts (24h \"reply yes\", 1h, 10m) in Aidan's voice, sends Aidan the 30-min prep brief and the post-call wrap-up nudge, tracks Outlook invite acceptance, and handles no-shows (opp moved back to New Lead -> reschedule text, reply bot rebooks). Only touches records with status=booked.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/5 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "respark_appointment_flow",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "apptFlow": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "resparkAppointmentFlow",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Appointment reminders + outcomes",
+            "description": "Booked Respark leads only"
+          }
+        }
+      }
+    ]
+  }
+}

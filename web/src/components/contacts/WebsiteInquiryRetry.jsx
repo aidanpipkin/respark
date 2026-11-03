@@ -1,0 +1,7 @@
+import { useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { call } from '@/components/workspace/api';
+import { notify } from '@/lib/feedback';
+export default function WebsiteInquiryRetry({contact}){const {user}=useOutletContext();const qc=useQueryClient();const [busy,setBusy]=useState(false),[message,setMessage]=useState('');if(user?.role!=='admin'||contact.lead_source!=='Respark website form')return null;async function retry(){setBusy(true);setMessage('');try{const r=await call('submitGetInfo',{action:'retry',lead_id:contact.id});await qc.invalidateQueries({queryKey:['contact',contact.id]});if(r.synced)notify.ok('Inquiry delivered','Check the activity log for notification delivery.');else{notify.info('Inquiry saved, not delivered yet','See the steps below, then retry.');setMessage('The inquiry is saved. Complete the private workspace connection and missing field mappings, then retry.');}}catch(e){notify.err(e,'Could not deliver the inquiry');}finally{setBusy(false);}}return <section className="panel p-4"><h2 className="section-title">Website inquiry delivery</h2><p className="subtext mt-2">The request and consent record are saved here even if delivery needs attention.</p><Button className="mt-4" variant="outline" loading={busy} onClick={retry}>{busy?'Retrying…':'Retry inquiry delivery'}</Button>{message&&<p role="status" className="mt-4 text-xs leading-6">{message}</p>}</section>;}

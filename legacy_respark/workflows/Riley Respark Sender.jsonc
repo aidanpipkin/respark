@@ -1,0 +1,45 @@
+{
+  "name": "Riley Respark Sender",
+  "description": "Every 5 minutes: sends the next due Respark sequence text to Riley's active leads inside the compliance window (9am-7:30pm lead local, Sunday rules, max 3 per 24h). Stops on DND, opp moved, reply, or Riley texting manually.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/5 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "riley_respark_sender",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "send": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "rileySend",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Send due Respark texts (Riley)",
+            "description": "rileySend"
+          }
+        }
+      }
+    ]
+  }
+}

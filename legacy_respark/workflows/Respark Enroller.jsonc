@@ -1,0 +1,45 @@
+{
+  "name": "Respark Enroller",
+  "description": "Every 30 minutes (7am-9pm CT, Mon-Sat): enrolls New Lead trucker opportunities into the 30-day Respark text sequence. Goat Fresh Premium Truckers leads enroll as soon as Aidan adds them (no age gate); GOAT Fresh Leads wait 3 days of no-answer calling first.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/30 7-21 * * 1-6",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "respark_enroller",
+      "version": "1.1",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "enroll": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "resparkEnroll",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Enroll New Lead truckers into Respark",
+            "description": "Premium Truckers pipeline: immediately. GOAT Fresh: after 3 days"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "name": "Riley Closed Client Guard",
+  "description": "Every 30 minutes: HARD RULE, never text a closed client. Scans every Closed/Sold stage across all of Riley's pipelines, retires any matching RileyResparkLead (status completed, CLIENT CLOSED) and tags the GHL contact \"Client - Do Not Text\". Read-only on pipelines, contacts and opportunities.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "9,39 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "riley_closed_client_guard",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "guard": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "rileyClosedGuard",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Protect Riley's closed clients",
+            "description": "rileyClosedGuard"
+          }
+        }
+      }
+    ]
+  }
+}

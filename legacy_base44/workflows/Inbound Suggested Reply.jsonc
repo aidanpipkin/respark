@@ -1,0 +1,40 @@
+{
+  "name": "Inbound Suggested Reply",
+  "description": "Retired: handled by the sending engine (syncChangedLeads / the reply pipeline run inside the worker).",
+  "trigger": {
+    "config": {
+      "trigger_type": "entity",
+      "entity_name": "MessageLog",
+      "events": [
+        "create"
+      ]
+    },
+    "condition": "${ false }"
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "inbound_suggested_reply",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "prepare_reply": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "aiReply",
+            "args": {
+              "message_log_id": "${ .trigger.entity_id }"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Prepare suggested reply",
+            "description": "Opt-outs and safety checks run first"
+          }
+        }
+      }
+    ]
+  }
+}

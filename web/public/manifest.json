@@ -1,0 +1,11 @@
+{
+  "name": "LeadRespark",
+  "short_name": "LeadRespark",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1F3631",
+  "icons": [
+    { "src": "https://base44.app/api/apps/6ad0dedae8a9cd807152d78a/files/mp/public/6ad0dedae8a9cd807152d78a/988d2fbff_apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

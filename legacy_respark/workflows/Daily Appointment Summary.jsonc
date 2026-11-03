@@ -1,0 +1,73 @@
+{
+  "name": "Daily Appointment Summary",
+  "description": "8am CT Mon-Sat: one iMessage brief for Aidan with today's booked calls plus the Respark text-campaign debrief (fresh leads to call first, interested leads, handoffs, new replies, stops, totals).",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 8 * * 1-6",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "daily_appointment_summary",
+      "version": "1.2",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "send_summary": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "sendAppointmentSummary"
+          },
+          "then": "respark_report",
+          "x-base44": {
+            "title": "Count today's appointments",
+            "description": "Outlook calendar"
+          }
+        }
+      },
+      {
+        "respark_report": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "resparkReport",
+            "args": {
+              "hours": 24
+            }
+          },
+          "then": "brief_aidan",
+          "x-base44": {
+            "title": "Pull Respark campaign snapshot",
+            "description": "Last 24h + fresh leads"
+          }
+        }
+      },
+      {
+        "brief_aidan": {
+          "call": "invoke_superagent_step",
+          "with": {
+            "message": "Morning brief for Aidan. Send ONE plain-text iMessage (no markdown) with two parts.\n\nPART 1, APPOINTMENTS. Result: ${ .send_summary }\nIf today_count is 0, remind Aidan he needs to book 3-5 appointments today from the calling list. If yesterday_count > 0, remind him to mark show/no-show in GHL.\n\nPART 2, RESPARK TEXT CAMPAIGN DEBRIEF. Data: ${ .respark_report }\nCover, briefly and by name with phone number:\n- CALL FIRST: fresh_leads_last_48h. These are brand-new vendor leads (speed-to-lead: a call inside the first hours is worth more than anything else). For each: name, phone, how many hours old, state, driver type, beneficiary, whether they replied yet, and how many call attempts are logged. Tell Aidan to double-dial any with zero attempts before he does anything else.\n- Booked calls (time, confirmed or not, invite status). Flag any ASAP bookings (\"call in 15\") that are still pending.\n- Who is interested / mid-conversation (conversing): what they said, where it stands, what Aidan should do (call them, let the bot keep working, etc.). Pull out anything important a human should know (health, family situation, money objections, divorce, wrong person, hostile).\n- Handoffs waiting on Aidan.\n- Replies in the last 24h that are new.\n- Stops in the last 24h and why (STOP, not interested, wrong number). Note any lead who got the one honest push-back after a first \"no\" and has not answered yet.\n- One line of totals: enrolled, texts sent, reply rate, active.\nSkip empty sections. Keep it tight: this is a text message, not a report. If a lead asked for a call or is clearly interested and not yet booked, lead with that (after the CALL FIRST list)."
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Write and send the iMessage brief",
+            "description": "Fresh leads first, then booked, interested, stops"
+          }
+        }
+      }
+    ]
+  }
+}

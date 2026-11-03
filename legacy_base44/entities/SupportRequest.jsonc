@@ -1,0 +1,87 @@
+{
+  "name": "SupportRequest",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "agent_name": {
+      "type": "string"
+    },
+    "answered_at": {
+      "type": "string"
+    },
+    "context": {
+      "description": "Snapshot of the agent's setup and open issues when they asked.",
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "page": {
+      "type": "string"
+    },
+    "replies": {
+      "items": {
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "status": {
+      "default": "open",
+      "enum": [
+        "open",
+        "answered",
+        "closed"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "message"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

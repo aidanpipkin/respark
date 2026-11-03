@@ -1,0 +1,93 @@
+{
+  "name": "ConversationSummary",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "campaign_id": {
+      "type": "string"
+    },
+    "campaign_name": {
+      "type": "string"
+    },
+    "ghl_contact_id": {
+      "type": "string",
+      "rls": {
+        "read": false
+      }
+    },
+    "ghl_conversation_id": {
+      "type": "string",
+      "rls": {
+        "read": false
+      }
+    },
+    "has_pending_draft": {
+      "type": "boolean"
+    },
+    "last_direction": {
+      "type": "string"
+    },
+    "last_message": {
+      "type": "string"
+    },
+    "last_time": {
+      "type": "string"
+    },
+    "lead_id": {
+      "type": "string"
+    },
+    "lead_name": {
+      "type": "string"
+    },
+    "location_id": {
+      "type": "string",
+      "rls": {
+        "read": false
+      }
+    },
+    "phone": {
+      "type": "string"
+    },
+    "replied_at": {
+      "description": "When the contact last texted us. Empty means they've never replied (one-way follow-up only).",
+      "type": "string"
+    },
+    "status_chip": {
+      "type": "string"
+    },
+    "unread": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "agent_email",
+    "location_id"
+  ],
+  "type": "object",
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

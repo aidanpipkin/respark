@@ -1,0 +1,191 @@
+{
+  "name": "PlatformSettings",
+  "properties": {
+    "a2p_packet_template": {
+      "type": "string"
+    },
+    "a2p_provider": {
+      "default": "manual",
+      "description": "twilio = agents register A2P and buy numbers through your Twilio account automatically.",
+      "enum": [
+        "manual",
+        "twilio"
+      ],
+      "type": "string"
+    },
+    "agency_company_id": {
+      "default": "ZqqdNc830ANRYPqW6rmi",
+      "type": "string"
+    },
+    "booking_documents": {
+      "description": "Pre-call documents attached to appointment emails: [{id, name, url, products: ['iul'|'all'], active}].",
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "credits_enforced": {
+      "default": true,
+      "description": "If on, texts only send when the agent has credits.",
+      "type": "boolean"
+    },
+    "credits_exempt_emails": {
+      "description": "Agents whose texts are not charged (e.g. the platform owner).",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "default_recharge_amount_cents": {
+      "default": 10000,
+      "type": "integer"
+    },
+    "default_recharge_threshold_cents": {
+      "default": 2500,
+      "type": "integer"
+    },
+    "default_send_windows": {
+      "type": "object"
+    },
+    "default_sequence_campaign_id": {
+      "type": "string"
+    },
+    "default_timezone": {
+      "default": "America/Chicago",
+      "type": "string"
+    },
+    "ghl_client_id": {
+      "description": "Client ID of the GHL marketplace app (not secret).",
+      "type": "string"
+    },
+    "ghl_install_url": {
+      "description": "Installation URL copied from the GHL marketplace app's Auth page.",
+      "type": "string"
+    },
+    "google_oauth_client_id": {
+      "type": "string"
+    },
+    "ms_oauth_client_id": {
+      "type": "string"
+    },
+    "owner_email": {
+      "default": "aidan@usnaturalinsurance.com",
+      "type": "string"
+    },
+    "owner_alert_phone": {
+      "description": "E.164 mobile that receives platform alert texts when the owner has no LeadRespark texting number of their own.",
+      "type": "string"
+    },
+    "owner_alert_from_number": {
+      "description": "E.164 number on the master Twilio account that platform alert texts are sent from. Leave both blank for email-only alerts.",
+      "type": "string"
+    },
+    "auto_approve_on_payment": {
+      "default": false,
+      "description": "With approval required: approve a signup (and start building their workspace) as soon as they save a card or subscribe.",
+      "type": "boolean"
+    },
+    "llm_fallback_allowed": {
+      "default": false,
+      "description": "If the platform Anthropic/OpenAI key fails, allow AI calls to fall back to Base44 InvokeLLM credits. Off: the text is retried later instead.",
+      "type": "boolean"
+    },
+    "phone_number_setup_fee_cents": {
+      "default": 0,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "self_serve_enabled": {
+      "default": true,
+      "description": "Anyone who signs up can build their own workspace.",
+      "type": "boolean"
+    },
+    "self_serve_requires_approval": {
+      "default": false,
+      "description": "If on, a new agent's workspace is only built after an admin approves them.",
+      "type": "boolean"
+    },
+    "singleton_key": {
+      "default": "platform",
+      "type": "string"
+    },
+    "stripe_mode": {
+      "enum": [
+        "test",
+        "live"
+      ],
+      "type": "string"
+    },
+    "stripe_price_id": {
+      "description": "Stripe recurring price used for the subscription (created automatically).",
+      "type": "string"
+    },
+    "subscription_price_cents": {
+      "default": 10000,
+      "description": "Monthly subscription price in cents.",
+      "minimum": 100,
+      "type": "integer"
+    },
+    "subscription_required": {
+      "default": true,
+      "description": "Agents need an active subscription to text.",
+      "type": "boolean"
+    },
+    "test_plan_template": {
+      "type": "string"
+    },
+    "text_price_cents": {
+      "default": 3,
+      "description": "Price charged per SMS segment, in cents.",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "twilio_isv_email": {
+      "description": "Your company email used on Twilio compliance bundles.",
+      "type": "string"
+    },
+    "twilio_primary_profile_sid": {
+      "description": "Your approved ISV Primary Customer Profile (BU...) in Twilio Trust Hub.",
+      "type": "string"
+    },
+    "website_spec_template": {
+      "type": "string"
+    },
+    "extra_number_monthly_cents": {
+      "type": "number",
+      "default": 300,
+      "description": "Monthly price for each number beyond the first"
+    },
+    "voice_price_cents_per_min": {
+      "type": "number",
+      "default": 4,
+      "description": "Price per connected call minute"
+    },
+    "max_numbers_per_agent": {
+      "type": "number",
+      "default": 10
+    }
+  },
+  "required": [
+    "singleton_key"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false,
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

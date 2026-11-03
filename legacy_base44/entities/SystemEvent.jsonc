@@ -1,0 +1,122 @@
+{
+  "name": "SystemEvent",
+  "properties": {
+    "action_href": {
+      "type": "string"
+    },
+    "action_label": {
+      "type": "string"
+    },
+    "agent_email": {
+      "type": "string"
+    },
+    "agent_notified_at": {
+      "type": "string"
+    },
+    "agent_visible": {
+      "description": "Show to the agent as an in-app banner.",
+      "type": "boolean"
+    },
+    "data": {
+      "type": "object"
+    },
+    "detail": {
+      "type": "string"
+    },
+    "first_seen_at": {
+      "type": "string"
+    },
+    "key": {
+      "description": "Dedupe key: one open event per key.",
+      "type": "string"
+    },
+    "kind": {
+      "description": "e.g. send_failures, ai_fallback, low_balance, recharge_failed, payment_failed, a2p_stuck, setup_stalled, job_stale, unanswered, help_request, rehearsal",
+      "type": "string"
+    },
+    "last_seen_at": {
+      "type": "string"
+    },
+    "lead_id": {
+      "type": "string"
+    },
+    "occurrences": {
+      "type": "number"
+    },
+    "owner_notified_at": {
+      "type": "string"
+    },
+    "resolved_at": {
+      "type": "string"
+    },
+    "scope": {
+      "default": "platform",
+      "enum": [
+        "platform",
+        "agent"
+      ],
+      "type": "string"
+    },
+    "severity": {
+      "default": "warning",
+      "enum": [
+        "info",
+        "warning",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "status": {
+      "default": "open",
+      "enum": [
+        "open",
+        "resolved"
+      ],
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "key",
+    "kind"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "$and": [
+            {
+              "data.agent_email": "{{user.email}}"
+            },
+            {
+              "data.agent_visible": true
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

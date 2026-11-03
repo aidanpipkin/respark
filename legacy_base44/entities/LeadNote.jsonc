@@ -1,0 +1,64 @@
+{
+  "name": "LeadNote",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "author_email": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "kind": {
+      "default": "note",
+      "enum": [
+        "note",
+        "call",
+        "system"
+      ],
+      "type": "string"
+    },
+    "lead_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "lead_id",
+    "body"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

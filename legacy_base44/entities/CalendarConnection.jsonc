@@ -1,0 +1,66 @@
+{
+  "name": "CalendarConnection",
+  "type": "object",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "google",
+        "microsoft"
+      ]
+    },
+    "connector_id": {
+      "type": "string",
+      "rls": {
+        "read": false
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "not_connected",
+        "connected",
+        "disconnected"
+      ],
+      "default": "not_connected"
+    },
+    "connected_at": {
+      "type": "string"
+    },
+    "disconnected_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "provider"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

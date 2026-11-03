@@ -1,0 +1,64 @@
+{
+  "name": "Referral",
+  "properties": {
+    "code": {
+      "description": "Referrer's public slug used in the invite link.",
+      "type": "string"
+    },
+    "joined_at": {
+      "type": "string"
+    },
+    "referee_email": {
+      "type": "string"
+    },
+    "referee_reward_cents": {
+      "type": "number"
+    },
+    "referrer_email": {
+      "type": "string"
+    },
+    "referrer_reward_cents": {
+      "type": "number"
+    },
+    "rewarded_at": {
+      "type": "string"
+    },
+    "status": {
+      "default": "joined",
+      "enum": [
+        "joined",
+        "rewarding",
+        "rewarded"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "code",
+    "referrer_email",
+    "referee_email"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

@@ -1,0 +1,367 @@
+{
+  "name": "AgentSettings",
+  "properties": {
+    "a2p_notes": {
+      "type": "string"
+    },
+    "a2p_status": {
+      "default": "not_started",
+      "enum": [
+        "not_started",
+        "brand_submitted",
+        "campaign_submitted",
+        "approved",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "about_text": {
+      "type": "string"
+    },
+    "accent_color": {
+      "default": "#FF6B2C",
+      "type": "string"
+    },
+    "address_city": {
+      "type": "string"
+    },
+    "address_state": {
+      "type": "string"
+    },
+    "address_street": {
+      "type": "string"
+    },
+    "address_zip": {
+      "type": "string"
+    },
+    "agency_name": {
+      "type": "string"
+    },
+    "agent_email": {
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "agent_ghl_user_id": {
+      "rls": {
+        "read": false,
+        "write": false
+      },
+      "type": "string"
+    },
+    "agent_title": {
+      "default": "Licensed Life Insurance Agent",
+      "type": "string"
+    },
+    "alert_mobile": {
+      "type": "string"
+    },
+    "beta_access": {
+      "default": false,
+      "type": "boolean"
+    },
+    "blocked_dates": {
+      "description": "YYYY-MM-DD days off (agent's timezone).",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "booking_url": {
+      "type": "string"
+    },
+    "brand_name": {
+      "type": "string"
+    },
+    "business_address": {
+      "type": "string"
+    },
+    "business_email": {
+      "type": "string"
+    },
+    "business_phone": {
+      "type": "string"
+    },
+    "busy_cache": {
+      "description": "Parsed busy intervals from busy_calendar_url: {fetched_at, busy:[[startISO,endISO]], error}",
+      "type": "object"
+    },
+    "busy_calendar_url": {
+      "description": "Private iCal (ICS) link of the agent's personal calendar; busy times are kept off the booking calendar.",
+      "type": "string"
+    },
+    "calendar_hours": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "calendar_id": {
+      "type": "string"
+    },
+    "completed_steps": {
+      "items": {
+        "type": "integer"
+      },
+      "type": "array"
+    },
+    "connected": {
+      "default": false,
+      "type": "boolean"
+    },
+    "custom_field_ids": {
+      "type": "object"
+    },
+    "custom_value_ids": {
+      "type": "object"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "domain": {
+      "type": "string"
+    },
+    "first_name": {
+      "type": "string"
+    },
+    "ghl_token": {
+      "rls": {
+        "read": false,
+        "write": false
+      },
+      "type": "string"
+    },
+    "ghl_token_expires_at": {
+      "rls": {
+        "read": false,
+        "write": false
+      },
+      "type": "string"
+    },
+    "hard_ceiling": {
+      "default": "20:00",
+      "type": "string"
+    },
+    "hard_floor": {
+      "default": "09:00",
+      "type": "string"
+    },
+    "headshot_url": {
+      "type": "string"
+    },
+    "home_timezone": {
+      "default": "America/Chicago",
+      "type": "string"
+    },
+    "invite_status": {
+      "type": "string"
+    },
+    "invited_at": {
+      "type": "string"
+    },
+    "last_name": {
+      "type": "string"
+    },
+    "lead_webhook_campaign_id": {
+      "type": "string"
+    },
+    "lead_webhook_key": {
+      "description": "Secret for the agent's fresh-lead webhook URL.",
+      "type": "string"
+    },
+    "legal_business_name": {
+      "type": "string"
+    },
+    "licensed_states": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "live_at": {
+      "type": "string"
+    },
+    "location_id": {
+      "rls": {
+        "read": false,
+        "write": false
+      },
+      "type": "string"
+    },
+    "logo_url": {
+      "type": "string"
+    },
+    "max_calls_per_day": {
+      "default": 6,
+      "type": "integer"
+    },
+    "mode": {
+      "default": "review",
+      "enum": [
+        "review",
+        "autopilot"
+      ],
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "notification_email": {
+      "type": "string"
+    },
+    "notification_phone": {
+      "type": "string"
+    },
+    "npn": {
+      "type": "string"
+    },
+    "onboarding_checks": {
+      "type": "object"
+    },
+    "onboarding_complete": {
+      "default": false,
+      "type": "boolean"
+    },
+    "onboarding_step": {
+      "default": 1,
+      "maximum": 9,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "opt_out_keywords": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "owner_user_id": {
+      "type": "string"
+    },
+    "phone_number": {
+      "type": "string"
+    },
+    "pipeline_id": {
+      "type": "string"
+    },
+    "preferred_area_code": {
+      "type": "string"
+    },
+    "primary_color": {
+      "default": "#0F1E3D",
+      "type": "string"
+    },
+    "products": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "products_offered": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "provisioning": {
+      "description": "Self-serve workspace build progress: state, steps, error",
+      "rls": {
+        "write": false
+      },
+      "type": "object"
+    },
+    "public_slug": {
+      "type": "string"
+    },
+    "quiet_end": {
+      "default": "09:00",
+      "type": "string"
+    },
+    "quiet_start": {
+      "default": "20:00",
+      "type": "string"
+    },
+    "self_serve": {
+      "default": false,
+      "rls": {
+        "write": false
+      },
+      "type": "boolean"
+    },
+    "send_window_1": {
+      "default": "11:00-13:00",
+      "type": "string"
+    },
+    "send_window_2": {
+      "default": "17:00-19:00",
+      "type": "string"
+    },
+    "setup_checklist": {
+      "type": "object"
+    },
+    "stage_ids": {
+      "type": "object"
+    },
+    "status": {
+      "default": "onboarding",
+      "enum": [
+        "invited",
+        "onboarding",
+        "live",
+        "paused"
+      ],
+      "type": "string"
+    },
+    "test_leads_at": {
+      "description": "When the agent first created fictional test leads; the sender then runs them in test-only mode even before go-live.",
+      "type": "string"
+    },
+    "daily_send_cap": {"type": "integer", "description": "Most follow-up texts this agent's campaign sends per day (carrier limits). Replies don't count."},
+    "throttle_until": {"type": "string", "description": "Follow-ups pause until this time after an opt-out or filtering spike."},
+    "meeting_link": {"type": "string", "description": "Zoom (or Google Meet / Teams) link added to every booked call's invites."},
+    "reply_alerts": {"type": "string", "enum": ["every", "needs_you", "off"], "default": "every", "description": "Text the agent when leads reply: every reply, only when they need the agent, or never."},
+    "tag_ids": {
+      "type": "object"
+    },
+    "chat_widget_id": {
+      "type": "string",
+      "description": "LeadConnector (GHL) chat widget ID shown on the agent's public site."
+    },
+    "test_phone_numbers": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "token_kind": {
+      "description": "pit = pasted private integration token; oauth = minted from the agency marketplace connection and refreshed automatically",
+      "enum": [
+        "pit",
+        "oauth"
+      ],
+      "rls": {
+        "read": false,
+        "write": false
+      },
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false,
+    "read": false,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

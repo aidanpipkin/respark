@@ -1,0 +1,80 @@
+{
+  "name": "ControlAudit",
+  "type": "object",
+  "properties": {
+    "agent_email": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "location_id": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": false
+      }
+    },
+    "lead_id": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "actor_email": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "action": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "details": {
+      "type": "object",
+      "rls": {
+        "write": false,
+        "read": false
+      }
+    },
+    "occurred_at": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    }
+  },
+  "required": [
+    "agent_email",
+    "location_id",
+    "action"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

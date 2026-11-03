@@ -1,0 +1,104 @@
+{
+  "name": "Policy",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "appointment_id": {
+      "type": "string"
+    },
+    "approved_at": {
+      "type": "string"
+    },
+    "beneficiary": {
+      "type": "string"
+    },
+    "carrier": {
+      "type": "string"
+    },
+    "client_name": {
+      "type": "string"
+    },
+    "coverage_amount_cents": {
+      "type": "number"
+    },
+    "coverage_start_date": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "first_draft_date": {
+      "type": "string"
+    },
+    "lead_id": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "policy_number": {
+      "type": "string"
+    },
+    "premium_amount_cents": {
+      "type": "number"
+    },
+    "premium_frequency": {
+      "enum": [
+        "monthly",
+        "quarterly",
+        "semi_annual",
+        "annual"
+      ],
+      "type": "string"
+    },
+    "product": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "submitted",
+        "approved",
+        "declined",
+        "lapsed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "submitted_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "lead_id",
+    "carrier",
+    "policy_number"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false,
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

@@ -1,0 +1,121 @@
+{
+  "name": "PhoneNumber",
+  "type": "object",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "phone_number": {
+      "type": "string"
+    },
+    "phone_sid": {
+      "type": "string"
+    },
+    "subaccount_sid": {
+      "type": "string"
+    },
+    "label": {
+      "type": "string"
+    },
+    "area_code": {
+      "type": "string"
+    },
+    "locality": {
+      "type": "string"
+    },
+    "is_primary": {
+      "type": "boolean",
+      "default": false
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "paused",
+        "unpaid",
+        "released"
+      ],
+      "default": "active"
+    },
+    "in_messaging_service": {
+      "type": "boolean",
+      "default": false
+    },
+    "voice_configured": {
+      "type": "boolean",
+      "default": false
+    },
+    "profile_assigned": {
+      "type": "boolean",
+      "default": false
+    },
+    "shaken_assigned": {
+      "type": "boolean",
+      "default": false
+    },
+    "cnam_assigned": {
+      "type": "boolean",
+      "default": false
+    },
+    "vi_assigned": {
+      "type": "boolean",
+      "default": false
+    },
+    "monthly_fee_cents": {
+      "type": "number",
+      "default": 0
+    },
+    "paid_through": {
+      "type": "string"
+    },
+    "purchased_at": {
+      "type": "string"
+    },
+    "released_at": {
+      "type": "string"
+    },
+    "health": {
+      "type": "object",
+      "description": "Latest health snapshot: score, grade, stats and tips"
+    },
+    "health_checked_at": {
+      "type": "string"
+    },
+    "last_error": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "phone_number"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

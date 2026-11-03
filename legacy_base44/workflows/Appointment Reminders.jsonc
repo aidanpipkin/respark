@@ -1,0 +1,45 @@
+{
+  "description": "Checks upcoming call reminders and reconciles delivery status every fifteen minutes.",
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "appointment_reminders",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "send_reminders": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "appointmentReminders",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Process reminders",
+            "description": "Upcoming appointments and delivery receipts"
+          }
+        }
+      }
+    ]
+  },
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/5 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "name": "Appointment Reminders"
+}

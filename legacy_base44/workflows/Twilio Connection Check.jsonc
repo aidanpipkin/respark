@@ -1,0 +1,48 @@
+{
+  "name": "Twilio Connection Check",
+  "description": "Manual: records whether the Twilio credentials and ISV profile are working.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 6 * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "do": [
+      {
+        "check": {
+          "call": "invoke_backend_function",
+          "then": "end",
+          "with": {
+            "args": {
+              "action": "status",
+              "record": true
+            },
+            "function_name": "adminTwilio"
+          },
+          "x-base44": {
+            "description": "Credentials, account type, primary profile",
+            "title": "Check Twilio"
+          }
+        }
+      }
+    ],
+    "document": {
+      "dsl": "1.0.0",
+      "name": "twilio_connection_check",
+      "namespace": "base44",
+      "version": "1.0"
+    }
+  }
+}

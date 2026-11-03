@@ -1,0 +1,45 @@
+{
+  "name": "Respark Sender",
+  "description": "Every 5 minutes (8am-9:55pm CT, every day): sends the next due Respark text to each active lead inside their local compliance window (9am-7:30pm Mon-Sat; Sunday 12-7:30pm except AL/LA/MS/UT/RI), max 3 sequence texts per lead per 24h. Fresh vendor leads get the day-0 burst (D1 now, F2 +20m, F3 +4h). Stops on DND/stage change/reply/manual takeover.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/5 8-21 * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "respark_sender",
+      "version": "1.1",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "send": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "resparkSend",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Send due Respark texts",
+            "description": "Every 5 min, fresh-lead burst + 30-day track"
+          }
+        }
+      }
+    ]
+  }
+}

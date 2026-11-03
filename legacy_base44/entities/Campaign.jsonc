@@ -1,0 +1,181 @@
+{
+  "name": "Campaign",
+  "properties": {
+    "ab_enabled": {
+      "type": "boolean"
+    },
+    "ab_lead_cap": {
+      "default": 200,
+      "type": "number"
+    },
+    "ab_locked": {
+      "default": false,
+      "type": "boolean"
+    },
+    "ab_winner": {
+      "enum": [
+        "A",
+        "B"
+      ],
+      "type": "string"
+    },
+    "agent_email": {
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "ai_model": {
+      "default": "claude-sonnet-5",
+      "description": "Model used for this campaign's writing and replies.",
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "ghl_tag": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "knowledge_doc": {
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "location_id": {
+      "rls": {
+        "read": false,
+        "write": false
+      },
+      "type": "string"
+    },
+    "mode": {
+      "default": "review",
+      "enum": [
+        "review",
+        "autopilot"
+      ],
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "archived": {
+      "description": "Hidden from the agent: a playbook they never used (no leads). Still owned by them and restorable by an administrator.",
+      "type": "boolean"
+    },
+    "review_sequence": {
+      "description": "Escape hatch: when true, pre-written follow-up steps are drafted for approval in review mode (default: steps always send; review mode applies to AI replies only).",
+      "rls": {
+        "write": false
+      },
+      "type": "boolean"
+    },
+    "cadence": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "standard"
+      ],
+      "description": "Follow-up cadence for leads that start from now on."
+    },
+    "name": {
+      "type": "string"
+    },
+    "persona": {
+      "enum": [
+        "assistant",
+        "agent_first_person"
+      ],
+      "type": "string"
+    },
+    "personalize_sequence": {
+      "default": true,
+      "description": "When on, each follow-up is written for the specific lead from their profile; when off, the approved template text is sent.",
+      "rls": {
+        "write": false
+      },
+      "type": "boolean"
+    },
+    "pipeline_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "product": {
+      "type": "string"
+    },
+    "prompt_version": {
+      "rls": {
+        "write": false
+      },
+      "type": "number"
+    },
+    "stage_ids": {
+      "rls": {
+        "read": false
+      },
+      "type": "object"
+    },
+    "status": {
+      "default": "draft",
+      "enum": [
+        "draft",
+        "active",
+        "paused"
+      ],
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "system_prompt": {
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "writer_prompt": {
+      "description": "Guidance the AI follows when it writes each personalized follow-up text.",
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "location_id",
+    "name"
+  ],
+  "type": "object",
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

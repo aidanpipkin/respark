@@ -1,0 +1,45 @@
+{
+  "name": "Respark Reply Monitor",
+  "description": "Every 5 minutes: the Respark reply bot (speaking as Aidan) answers new inbound texts from enrolled leads, books 30-min calls on Aidan's Outlook calendar, moves GHL opps, alerts Aidan, and goes quiet on any lead Aidan texts himself. Deactivated until Aidan approves go-live.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/5 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "respark_reply_monitor",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "replyBot": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "aidanReply",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Reply bot answers as Aidan",
+            "description": "All enrolled leads"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "name": "MessageLog",
+  "type": "object",
+  "properties": {
+    "agent_email": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "location_id": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": false
+      }
+    },
+    "lead_id": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "campaign_id": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "ghl_message_id": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": false
+      }
+    },
+    "event_type": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "direction": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "source": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "body": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "status": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "occurred_at": {
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "step_number": {
+      "type": "number"
+    },
+    "dispatch_id": {
+      "type": "string"
+    },
+    "number": {
+      "type": "string",
+      "description": "Business number used (from for outbound, to for inbound)"
+    },
+    "error_code": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "event_type",
+    "occurred_at"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "name": "CallLog",
+  "type": "object",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "lead_id": {
+      "type": "string"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "outbound",
+        "inbound"
+      ]
+    },
+    "from_number": {
+      "type": "string",
+      "description": "The business number used"
+    },
+    "lead_phone": {
+      "type": "string"
+    },
+    "agent_phone": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "description": "calling_agent, agent_missed, ringing_lead, in_progress, completed, no_answer, busy, failed, voicemail, missed"
+    },
+    "agent_call_sid": {
+      "type": "string"
+    },
+    "lead_call_sid": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "answered_at": {
+      "type": "string"
+    },
+    "ended_at": {
+      "type": "string"
+    },
+    "duration_sec": {
+      "type": "number",
+      "default": 0
+    },
+    "billed_cents": {
+      "type": "number",
+      "default": 0
+    },
+    "recording_sid": {
+      "type": "string"
+    },
+    "recording_duration_sec": {
+      "type": "number"
+    },
+    "note": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

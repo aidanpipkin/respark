@@ -1,0 +1,63 @@
+{
+  "name": "SavedView",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "position": {
+      "type": "number"
+    },
+    "search": {
+      "type": "string"
+    },
+    "sort": {
+      "type": "string"
+    },
+    "stage": {
+      "type": "string"
+    },
+    "tag": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

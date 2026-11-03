@@ -1,0 +1,45 @@
+{
+  "name": "Riley Respark Appointment Flow",
+  "description": "Every 5 minutes: light-touch reminders to Riley's booked leads (day-before text + branded email, then one of T-1h / T-10m), Riley's T-30m prep brief and T+45m wrap-up nudge, and no-show handling (opp back to New Lead = reschedule text).",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "2-57/5 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "riley_respark_appointment_flow",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "appointments": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "rileyAppointmentFlow",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Reminders + prep (Riley)",
+            "description": "rileyAppointmentFlow"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+import { useEffect,useState } from 'react';
+import { Image } from '@/components/ui/image';
+import ResparkLogo from '@/components/branding/ResparkLogo';
+import { base44 } from '@/api/base44Client';
+export default function BrandMark({settings,light=false}){const [url,setUrl]=useState('');useEffect(()=>{let active=true;setUrl('');const value=settings?.logo_url;if(value?.startsWith('https://'))setUrl(value);else if(value)base44.integrations.Core.CreateFileSignedUrl({file_uri:value}).then(r=>{if(active)setUrl(r.signed_url);});return()=>{active=false;};},[settings?.logo_url]);return url?<span className="flex min-w-0 items-center gap-2.5"><Image src={url} alt="" className="h-10 w-10 shrink-0 rounded-lg" fittingType="fit"/><span className="truncate text-base font-semibold tracking-tight">{settings?.brand_name||'Respark'}</span></span>:<ResparkLogo light={light}/>;}

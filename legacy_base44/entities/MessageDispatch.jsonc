@@ -1,0 +1,78 @@
+{
+  "name": "MessageDispatch",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "agent_email": {
+      "type": "string"
+    },
+    "lead_id": {
+      "type": "string"
+    },
+    "location_id": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "new",
+        "working",
+        "done",
+        "uncertain"
+      ],
+      "default": "new"
+    },
+    "token": {
+      "type": "string"
+    },
+    "ghl_message_id": {
+      "type": "string"
+    },
+    "delivery_status": {
+      "type": "string"
+    },
+    "step_number": {
+      "type": "number"
+    },
+    "body": {
+      "type": "string"
+    },
+    "result": {
+      "type": "object"
+    },
+    "from_number": {
+      "type": "string"
+    },
+    "error_code": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "key",
+    "agent_email",
+    "kind"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

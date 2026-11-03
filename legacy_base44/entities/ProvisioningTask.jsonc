@@ -1,0 +1,80 @@
+{
+  "name": "ProvisioningTask",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "agent_email": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "phone_number",
+        "a2p"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "working",
+        "done",
+        "needs_attention"
+      ],
+      "default": "queued"
+    },
+    "requested_number": {
+      "type": "string"
+    },
+    "registration_id": {
+      "type": "string"
+    },
+    "public_note": {
+      "type": "string"
+    },
+    "admin_note": {
+      "type": "string",
+      "rls": {
+        "read": false
+      }
+    },
+    "resolved_by": {
+      "type": "string"
+    },
+    "resolved_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "key",
+    "agent_email",
+    "kind"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

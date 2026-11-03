@@ -1,0 +1,45 @@
+{
+  "name": "GOAT Lead Follow-up Texts",
+  "description": "Every 5 minutes: runs the GOAT fresh-lead text sequence. Detects replies (sends the calendar text and alerts Aidan), sends the 15-minute nudge and same-day final text when there is no reply, respects 8am-8:30pm in the lead's time zone, and stops when the lead replies, goes DND, or is moved out of New Lead.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/5 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "goat_lead_followup_texts",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_followup": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "goatLeadFollowup",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Run GOAT text sequence",
+            "description": "Replies, nudges, final text"
+          }
+        }
+      }
+    ]
+  }
+}

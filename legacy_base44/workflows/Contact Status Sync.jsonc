@@ -1,0 +1,41 @@
+{
+  "name": "Contact Status Sync",
+  "description": "Retired: handled by the sending engine (syncChangedLeads / the reply pipeline run inside the worker).",
+  "trigger": {
+    "config": {
+      "trigger_type": "entity",
+      "entity_name": "Lead",
+      "events": [
+        "create",
+        "update"
+      ]
+    },
+    "condition": "${ false }"
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "contact_status_sync",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "sync_contact": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "syncLead",
+            "args": {
+              "lead_id": "${ .trigger.entity_id }"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Sync contact status",
+            "description": "Messaging preferences and pipeline"
+          }
+        }
+      }
+    ]
+  }
+}

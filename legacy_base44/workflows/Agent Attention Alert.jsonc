@@ -1,0 +1,41 @@
+{
+  "name": "Agent Attention Alert",
+  "description": "Retired: agents are now texted directly by the engine when a contact needs them (see flagHuman).",
+  "trigger": {
+    "config": {
+      "trigger_type": "entity",
+      "entity_name": "Lead",
+      "events": [
+        "update"
+      ]
+    },
+    "condition": "${ false }"
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "agent_attention_alert",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "alert_agent": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "agentAlert",
+            "args": {
+              "lead_id": "${ .trigger.entity_id }",
+              "event_id": "${ .trigger.data.updated_date // .trigger.data.last_inbound_at // .trigger.entity_id }"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Alert agent",
+            "description": "Configured phone, respecting quiet hours"
+          }
+        }
+      }
+    ]
+  }
+}

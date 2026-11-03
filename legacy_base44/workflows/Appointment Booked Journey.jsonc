@@ -1,0 +1,41 @@
+{
+  "name": "Appointment Booked Journey",
+  "description": "When a call is booked or moved: agent text, personalized emails to the lead and agent with documents and calendar links, and the confirmation/reminder schedule.",
+  "trigger": {
+    "config": {
+      "trigger_type": "entity",
+      "entity_name": "Appointment",
+      "events": [
+        "create",
+        "update"
+      ]
+    },
+    "condition": "${ .trigger.data.status == \"booked\" and (.trigger.event_type == \"create\" or .trigger.data.start_time != .trigger.old_data.start_time or .trigger.old_data.status != \"booked\") }"
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "appointment_booked_journey",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "start_journey": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "appointmentJourney",
+            "args": {
+              "appointment_id": "${ .trigger.entity_id }"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Start booked-call journey",
+            "description": "Alerts, emails, confirmation schedule"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "name": "A2P Registration Status",
+  "description": "Moves agent A2P registrations forward with Twilio (brand, campaign, number) every 30 minutes.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/30 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "do": [
+      {
+        "advance_a2p": {
+          "call": "invoke_backend_function",
+          "then": "end",
+          "with": {
+            "args": {},
+            "function_name": "a2pAdvance"
+          },
+          "x-base44": {
+            "description": "Brand, OTP, campaign and number status",
+            "title": "Advance A2P registrations"
+          }
+        }
+      }
+    ],
+    "document": {
+      "dsl": "1.0.0",
+      "name": "a2p_registration_status",
+      "namespace": "base44",
+      "version": "1.0"
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "name": "AgentBrief",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "agent_email": {
+      "type": "string"
+    },
+    "first_name": {
+      "type": "string"
+    },
+    "brand_name": {
+      "type": "string"
+    },
+    "workspace_url": {
+      "type": "string"
+    },
+    "date": {
+      "type": "string"
+    },
+    "bookings": {
+      "type": "number"
+    },
+    "replies": {
+      "type": "number"
+    },
+    "needs_human": {
+      "type": "number"
+    },
+    "pending_drafts": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "key",
+    "agent_email",
+    "date"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

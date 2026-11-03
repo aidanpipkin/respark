@@ -1,0 +1,57 @@
+{
+  "name": "QuickReply",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "label": {
+      "type": "string",
+      "description": "Short button label"
+    },
+    "text": {
+      "type": "string",
+      "description": "Reply text. Supports {first_name} and {my_name}."
+    },
+    "position": {
+      "type": "number"
+    },
+    "uses": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "agent_email",
+    "text"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

@@ -1,0 +1,317 @@
+{
+  "name": "Lead",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "ai_intent": {
+      "type": "string"
+    },
+    "ai_paused": {
+      "default": true,
+      "type": "boolean"
+    },
+    "ai_sentiment": {
+      "type": "string"
+    },
+    "ai_summary": {
+      "type": "string"
+    },
+    "cadence": {"type": "string", "description": "The follow-up cadence this lead started on."},
+    "campaign_id": {
+      "type": "string"
+    },
+    "consent_date": {
+      "type": "string"
+    },
+    "consent_seller_named": {
+      "type": "string"
+    },
+    "consent_source": {
+      "type": "string"
+    },
+    "consent_text": {
+      "type": "string"
+    },
+    "consent_wording": {
+      "type": "string"
+    },
+    "crm_synced_status": {
+      "description": "Last status/track/stage mirrored to GHL.",
+      "type": "string"
+    },
+    "current_step": {
+      "default": 0,
+      "type": "number"
+    },
+    "discovery_topic": {
+      "enum": [
+        "1",
+        "2"
+      ],
+      "type": "string"
+    },
+    "disposition_note": {
+      "type": "string"
+    },
+    "dnc_checked": {
+      "type": "boolean"
+    },
+    "dnc_basis": {
+      "description": "Why this number may be texted without a registry scrub: written_consent (attested prior express written consent) or registry_scrub (agent scrubbed the list against the National DNC Registry within 31 days). Empty when neither applies.",
+      "type": "string"
+    },
+    "eligibility_reason": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "first_name": {
+      "type": "string"
+    },
+    "ghl_contact_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "ghl_conversation_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "ghl_opportunity_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "import_batch": {
+      "type": "string"
+    },
+    "inquiry_date": {
+      "type": "string"
+    },
+    "last_disposition": {
+      "type": "string"
+    },
+    "last_disposition_at": {
+      "type": "string"
+    },
+    "last_inbound_at": {
+      "type": "string"
+    },
+    "last_inbound_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "last_name": {
+      "type": "string"
+    },
+    "last_outbound_at": {
+      "type": "string"
+    },
+    "lead_facts": {
+      "description": "Facts captured from import columns or the lead webhook (product_interest, prior_notes, date_of_birth, occupation, extra{} ...).",
+      "type": "object"
+    },
+    "lead_snapshot": {
+      "rls": {
+        "read": false
+      },
+      "type": "object"
+    },
+    "lead_source": {
+      "type": "string"
+    },
+    "location_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "needs_human_reason": {
+      "type": "string"
+    },
+    "next_nudge_at": {
+      "type": "string"
+    },
+    "next_nurture_at": {
+      "type": "string"
+    },
+    "next_send_at": {
+      "type": "string"
+    },
+    "nudge_count": {
+      "default": 0,
+      "type": "number"
+    },
+    "nurture_count": {
+      "default": 0,
+      "type": "number"
+    },
+    "offered_at": {
+      "type": "string"
+    },
+    "offered_slots": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "revisit_reason": {
+      "type": "string"
+    },
+    "send_lock_token": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "send_lock_until": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "sequence_paused": {
+      "default": true,
+      "type": "boolean"
+    },
+    "sequence_started_at": {
+      "type": "string"
+    },
+    "sequence_waiting_review": {
+      "default": false,
+      "type": "boolean"
+    },
+    "state": {
+      "type": "string"
+    },
+    "state_eligible": {
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "queued",
+        "in_sequence",
+        "replied",
+        "engaged",
+        "booked",
+        "held",
+        "no_show",
+        "opted_out",
+        "not_interested",
+        "needs_human",
+        "closed",
+        "client"
+      ],
+      "type": "string"
+    },
+    "status_before_takeover": {
+      "type": "string"
+    },
+    "step1_delivered": {
+      "default": false,
+      "type": "boolean"
+    },
+    "tags": {
+      "description": "Agent-defined labels for sorting and saved views.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "texts_last_24h": {
+      "type": "number"
+    },
+    "timezone": {
+      "type": "string"
+    },
+    "track": {
+      "description": "Post-appointment pipeline column and its text track.",
+      "enum": [
+        "",
+        "no_show",
+        "follow_up",
+        "lost_banking",
+        "lost_social",
+        "client"
+      ],
+      "type": "string"
+    },
+    "track_done": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "track_hold_until": {
+      "type": "string"
+    },
+    "track_next_at": {
+      "type": "string"
+    },
+    "track_started_at": {
+      "type": "string"
+    },
+    "variant": {
+      "type": "string"
+    },
+    "website_request_key": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "from_number": {
+      "type": "string",
+      "description": "Business number this lead is texted and called from (sticky)"
+    },
+    "last_called_at": {
+      "type": "string"
+    },
+    "call_count": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "agent_email",
+    "location_id",
+    "ghl_contact_id"
+  ],
+  "type": "object",
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false,
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

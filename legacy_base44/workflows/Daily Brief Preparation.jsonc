@@ -1,0 +1,45 @@
+{
+  "description": "Prepares daily activity snapshots for active, registered agents at 8am Central.",
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "daily_brief_preparation",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "prepare_briefs": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "dailyBrief",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Prepare agent briefs",
+            "description": "Server-calculated daily activity"
+          }
+        }
+      }
+    ]
+  },
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 8 * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "name": "Daily Brief Preparation"
+}

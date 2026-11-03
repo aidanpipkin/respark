@@ -1,0 +1,2 @@
+export async function loadCursor(base44,key){const page=await base44.asServiceRole.entities.EngineCursor.filter({key},{limit:1});return page.items[0]?.cursor||undefined;}
+export async function saveCursor(base44,key,cursor){await base44.asServiceRole.entities.EngineCursor.upsert([{key,cursor:cursor||''}],{key:'key'});}

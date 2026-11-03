@@ -1,0 +1,59 @@
+{
+  "name": "PreviewRun",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "campaign_id": {
+      "type": "string"
+    },
+    "error": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "object"
+    },
+    "prompt_version": {
+      "type": "number"
+    },
+    "results": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "source": {
+      "description": "sample:<name> or lead",
+      "type": "string"
+    }
+  },
+  "required": [
+    "campaign_id"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

@@ -1,0 +1,78 @@
+{
+  "name": "SequenceStep",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "cadence": {"type": "string", "description": "Which cadence this step belongs to (daily, standard). Empty for older series."},
+    "slot": {"type": "string", "enum": ["am", "pm"], "description": "Local time window: am 10:00-12:00, pm 2:30-5:30."},
+    "kind": {"type": "string", "enum": ["opener", "choice", "breakup", "close", "normal"], "description": "What the step must contain."},
+    "body": {
+      "type": "string"
+    },
+    "brief": {
+      "description": "What this step must accomplish; the AI personalizes the text around it.",
+      "type": "string"
+    },
+    "campaign_id": {
+      "type": "string"
+    },
+    "day_offset": {
+      "type": "number"
+    },
+    "lever": {
+      "type": "string"
+    },
+    "location_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "requires_step1_delivered": {
+      "type": "boolean"
+    },
+    "step_number": {
+      "type": "number"
+    },
+    "variant": {
+      "enum": [
+        "A",
+        "B",
+        "none"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "location_id",
+    "campaign_id"
+  ],
+  "type": "object",
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "name": "Platform Health",
+  "description": "Every 15 minutes: health checks, billing alerts, setup nudges and review reminders. Results in Admin \u2192 Command Center.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/15 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "do": [
+      {
+        "check": {
+          "call": "invoke_backend_function",
+          "then": "end",
+          "with": {
+            "args": {},
+            "function_name": "health"
+          },
+          "x-base44": {
+            "description": "Signals, nudges, alerts",
+            "title": "Run health checks"
+          }
+        }
+      }
+    ],
+    "document": {
+      "dsl": "1.0.0",
+      "name": "platform_health",
+      "namespace": "base44",
+      "version": "1.0"
+    }
+  }
+}

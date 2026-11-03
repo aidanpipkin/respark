@@ -1,0 +1,94 @@
+{
+  "name": "WebsiteSubmission",
+  "type": "object",
+  "properties": {
+    "request_key": {
+      "type": "string"
+    },
+    "agent_email": {
+      "type": "string"
+    },
+    "lead_id": {
+      "type": "string"
+    },
+    "ip_hash": {
+      "type": "string"
+    },
+    "submitted_at": {
+      "type": "string"
+    },
+    "first_name": {
+      "type": "string"
+    },
+    "last_name": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "product_interest": {
+      "type": "string"
+    },
+    "consent_checked": {
+      "type": "boolean"
+    },
+    "consent_text": {
+      "type": "string"
+    },
+    "contact_id": {
+      "type": "string"
+    },
+    "opportunity_id": {
+      "type": "string"
+    },
+    "sync_status": {
+      "type": "string",
+      "enum": [
+        "received",
+        "pending",
+        "synced"
+      ]
+    },
+    "notification_sent": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "request_key",
+    "agent_email",
+    "submitted_at",
+    "ip_hash"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

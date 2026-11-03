@@ -1,0 +1,235 @@
+{
+  "name": "A2PRegistration",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "approved_at": {
+      "type": "string"
+    },
+    "attested": {
+      "type": "boolean"
+    },
+    "brand_sid": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "brand_status": {
+      "type": "string"
+    },
+    "business_address": {
+      "type": "string"
+    },
+    "business_email": {
+      "type": "string"
+    },
+    "business_phone": {
+      "type": "string"
+    },
+    "business_type": {
+      "enum": [
+        "sole_proprietor",
+        "company"
+      ],
+      "type": "string"
+    },
+    "campaign_sid": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "campaign_status": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "customer_profile_sid": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "ein_last4": {
+      "type": "string"
+    },
+    "entity_type": {
+      "description": "Twilio business_type for Standard brands",
+      "enum": [
+        "Limited Liability Corporation",
+        "Corporation",
+        "Partnership",
+        "Co-operative",
+        "Non-profit Corporation"
+      ],
+      "type": "string"
+    },
+    "first_name": {
+      "type": "string"
+    },
+    "help_response": {
+      "type": "string"
+    },
+    "identity_status": {
+      "type": "string"
+    },
+    "last_checked_at": {
+      "type": "string"
+    },
+    "last_name": {
+      "type": "string"
+    },
+    "legal_business_name": {
+      "type": "string"
+    },
+    "messaging_service_sid": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "mobile_phone": {
+      "type": "string"
+    },
+    "npn": {
+      "type": "string"
+    },
+    "number_attached": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "opt_in_flow": {
+      "type": "string"
+    },
+    "postal_code": {
+      "type": "string"
+    },
+    "privacy_url": {
+      "type": "string"
+    },
+    "provider_reference": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "provider_step": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "rep_position": {
+      "enum": [
+        "Director",
+        "GM",
+        "VP",
+        "CEO",
+        "CFO",
+        "General Counsel",
+        "Other"
+      ],
+      "type": "string"
+    },
+    "rep_title": {
+      "type": "string"
+    },
+    "review_note": {
+      "type": "string"
+    },
+    "resubmit_requested": {
+      "description": "Set by an administrator after fixing a rejected campaign; the tracker resubmits it on the approved brand.",
+      "type": "boolean"
+    },
+    "last_rejection": {
+      "description": "The reviewers' last error text, used to tell a stale verdict from a new one after a resubmit.",
+      "type": "string"
+    },
+    "resubmitted_at": {
+      "type": "string"
+    },
+    "sample_message_1": {
+      "type": "string"
+    },
+    "sample_message_2": {
+      "type": "string"
+    },
+    "status": {
+      "default": "draft",
+      "enum": [
+        "draft",
+        "queued",
+        "brand_submitted",
+        "otp_pending",
+        "campaign_submitted",
+        "approved",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "stop_response": {
+      "type": "string"
+    },
+    "street": {
+      "type": "string"
+    },
+    "submitted_at": {
+      "type": "string"
+    },
+    "terms_url": {
+      "type": "string"
+    },
+    "trust_product_sid": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "twilio_subaccount_sid": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "website": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false,
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

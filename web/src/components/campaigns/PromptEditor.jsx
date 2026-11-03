@@ -1,0 +1,18 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useAction } from '@/lib/feedback';
+import { base44 } from '@/api/base44Client';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { call } from '@/components/workspace/api';
+export default function PromptEditor({ campaign, onClose }) {
+  const [prompt,setPrompt]=useState(campaign.system_prompt || '');const [knowledge,setKnowledge]=useState(campaign.knowledge_doc || '');const [notes,setNotes]=useState('');const [tab,setTab]=useState('System prompt');const {run,busy}=useAction();
+  const {data:versions}=useQuery({queryKey:['prompt-versions',campaign.id],queryFn:()=>base44.entities.PromptVersion.filter({campaign_id:campaign.id},{sort:'-version',limit:10})});
+  async function save(e){
+    e.preventDefault();
+    const next=(campaign.prompt_version || 0)+1;
+    const ok=await run('save',async()=>{await call('saveCampaign',{action:'prompt',campaign_id:campaign.id,expected_version:campaign.prompt_version,system_prompt:prompt,knowledge_doc:knowledge,notes});return true;},{ok:'Prompt saved',detail:`Version ${next} of ${campaign.name} is live. Try it with Test the AI.`,invalidate:[['campaigns'],['prompt-versions',campaign.id]],errTitle:'Prompt not saved'});
+    if(ok) onClose();
+  }
+  return <Dialog open onOpenChange={v=>!v&&onClose()}><DialogContent className="max-h-[92dvh] max-w-3xl overflow-auto"><DialogHeader><DialogTitle>Shape your assistant</DialogTitle><DialogDescription>{campaign.name} · Version {campaign.prompt_version}. Saving creates a new version.</DialogDescription></DialogHeader><form onSubmit={save}><div className="mb-4 flex gap-1 border-b">{['System prompt','Knowledge','Recent versions'].map(t=><button key={t} type="button" onClick={()=>setTab(t)} className={`min-h-11 px-3 text-xs ${t===tab?'border-b-2 border-primary font-semibold text-primary':'text-muted-foreground'}`}>{t}</button>)}</div>{tab==='Recent versions'?<div className="max-h-80 space-y-3 overflow-auto">{versions?.items.map(v=><details key={v.id} className="rounded-lg border p-3"><summary className="cursor-pointer text-xs font-medium">v{v.version} · {v.notes || 'Prompt update'}</summary><p className="my-2 text-[10px] text-muted-foreground">{new Date(v.created_date).toLocaleString()}</p><pre className="whitespace-pre-wrap text-xs leading-6">{v.system_prompt}{'\n\nKNOWLEDGE\n'}{v.knowledge_doc}</pre></details>)}{versions?.has_more&&<p className="text-xs text-muted-foreground">Showing the latest 10 versions. Earlier versions remain preserved.</p>}</div>:<textarea aria-label={tab} className="field min-h-[340px] font-mono text-xs leading-6" maxLength={30000} value={tab==='System prompt'?prompt:knowledge} onChange={e=>tab==='System prompt'?setPrompt(e.target.value):setKnowledge(e.target.value)}/>}<label className="mt-4 block"><span className="field-label">What changed?</span><input className="field" required maxLength={1000} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="A short note for your prompt history"/></label><div className="mt-5 flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button loading={busy==='save'} type="submit">{busy==='save'?'Saving':`Save version ${(campaign.prompt_version || 0)+1}`}</Button></div></form></DialogContent></Dialog>;
+}

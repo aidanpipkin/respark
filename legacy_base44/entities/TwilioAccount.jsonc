@@ -1,0 +1,89 @@
+{
+  "name": "TwilioAccount",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "friendly_name": {
+      "type": "string"
+    },
+    "location_id": {
+      "type": "string"
+    },
+    "phone_number": {
+      "description": "Number texted from directly through Twilio",
+      "type": "string"
+    },
+    "phone_sid": {
+      "type": "string"
+    },
+    "source": {
+      "enum": [
+        "created",
+        "matched",
+        "admin"
+      ],
+      "type": "string"
+    },
+    "subaccount_sid": {
+      "type": "string"
+    },
+    "webhook_url": {
+      "description": "Exact URL Twilio calls for replies and delivery receipts (used for signature checks)",
+      "type": "string"
+    },
+    "shaken_sid": {
+      "type": "string"
+    },
+    "shaken_status": {
+      "type": "string"
+    },
+    "cnam_sid": {
+      "type": "string"
+    },
+    "cnam_status": {
+      "type": "string"
+    },
+    "cnam_name": {
+      "type": "string"
+    },
+    "vi_sid": {
+      "type": "string"
+    },
+    "vi_status": {
+      "type": "string"
+    },
+    "trust_note": {
+      "type": "string"
+    },
+    "trust_checked_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "subaccount_sid"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false,
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

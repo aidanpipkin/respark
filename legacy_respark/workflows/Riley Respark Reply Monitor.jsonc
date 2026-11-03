@@ -1,0 +1,45 @@
+{
+  "name": "Riley Respark Reply Monitor",
+  "description": "Every 5 minutes: answers inbound texts from Riley's Respark leads as Riley, books calls on Riley's GHL calendar (synced to Outlook), sends the branded confirmation email, moves the opp to Appointment and alerts Riley. Handles STOP, not interested, wrong number, handoff, reschedule, cancel.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "1-56/5 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "riley_respark_reply_monitor",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "reply": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "rileyReply",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Answer replies as Riley",
+            "description": "rileyReply"
+          }
+        }
+      }
+    ]
+  }
+}

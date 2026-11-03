@@ -1,0 +1,56 @@
+{
+  "name": "StatsSnapshot",
+  "type": "object",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "location_id": {
+      "type": "string",
+      "rls": {
+        "read": false
+      }
+    },
+    "campaign_id": {
+      "type": "string"
+    },
+    "range": {
+      "type": "string"
+    },
+    "computed_at": {
+      "type": "string"
+    },
+    "metrics": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "agent_email",
+    "location_id"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

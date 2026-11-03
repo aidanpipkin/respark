@@ -1,0 +1,49 @@
+{
+  "name": "Daily Brief Email",
+  "description": "Retired: the daily brief email is now sent directly by dailyBrief.",
+  "trigger": {
+    "condition": "${ false }",
+    "config": {
+      "trigger_type": "entity",
+      "events": [
+        "create"
+      ],
+      "entity_name": "AgentBrief"
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "daily_brief_email",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "send_brief": {
+          "call": "send_email",
+          "with": {
+            "template_name": "AgentDailyBrief",
+            "to": "${ .trigger.data.agent_email }",
+            "description": "Today\u2019s calls, replies and attention list",
+            "variables": {
+              "first_name": "${ .trigger.data.first_name }",
+              "brand_name": "${ .trigger.data.brand_name }",
+              "date": "${ .trigger.data.date }",
+              "bookings": "${ .trigger.data.bookings }",
+              "replies": "${ .trigger.data.replies }",
+              "needs_human": "${ .trigger.data.needs_human }",
+              "pending_drafts": "${ .trigger.data.pending_drafts }",
+              "workspace_url": "${ .trigger.data.workspace_url }"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Send daily brief",
+            "description": "Personal activity snapshot"
+          }
+        }
+      }
+    ]
+  }
+}

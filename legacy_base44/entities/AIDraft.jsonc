@@ -1,0 +1,130 @@
+{
+  "name": "AIDraft",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "campaign_id": {
+      "type": "string"
+    },
+    "chosen_slot_iso": {
+      "type": "string"
+    },
+    "edit_reason": {
+      "type": "string"
+    },
+    "final_text": {
+      "type": "string"
+    },
+    "guardrail_flags": {
+      "type": "object"
+    },
+    "inbound_message_id": {
+      "type": "string"
+    },
+    "intent": {
+      "type": "string"
+    },
+    "lead_id": {
+      "type": "string"
+    },
+    "location_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "offered_slots": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "personalization": {
+      "description": "How the text was written: personalized or template, angle, which lead details were used, model.",
+      "type": "object"
+    },
+    "proposed_action": {
+      "enum": [
+        "none",
+        "get_free_slots",
+        "book_appointment",
+        "flag_for_human",
+        "stop"
+      ],
+      "type": "string"
+    },
+    "send_after": {
+      "type": "string",
+      "description": "Automatic replies wait until this time so they read like a person typed them."
+    },
+    "proposed_text": {
+      "type": "string"
+    },
+    "reviewed_by": {
+      "type": "string"
+    },
+    "sentiment": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "stage": {
+      "type": "number"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "approved",
+        "edited",
+        "discarded",
+        "sent"
+      ],
+      "type": "string"
+    },
+    "step_number": {
+      "type": "number"
+    },
+    "template_text": {
+      "description": "The approved template this personalized text replaced.",
+      "type": "string"
+    },
+    "trigger_at": {
+      "type": "string"
+    },
+    "variant": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "location_id"
+  ],
+  "type": "object",
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

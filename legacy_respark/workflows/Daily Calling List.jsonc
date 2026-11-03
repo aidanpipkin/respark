@@ -1,0 +1,57 @@
+{
+  "name": "Daily Calling List",
+  "description": "Sends a prioritized calling list email at 7am CT every weekday. Lists 200 GHL-synced leads ready to call with E.164 phone numbers for WAVV dialer.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 7 * * 1-6",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "do": [
+      {
+        "send_calling_list": {
+          "call": "invoke_backend_function",
+          "then": "notify_agent",
+          "with": {
+            "function_name": "sendCallingList"
+          },
+          "x-base44": {
+            "description": "Send prioritized calling list email to Aidan",
+            "title": "Send calling list"
+          }
+        }
+      },
+      {
+        "notify_agent": {
+          "call": "invoke_superagent_step",
+          "then": "end",
+          "with": {
+            "message": "The daily calling list has been sent to Aidan's email. Check the sendCallingList result for the count of leads ready to call. If the count is low (under 100), alert that GHL sync may need attention. Result: ${ .send_calling_list }"
+          },
+          "x-base44": {
+            "description": "Alert agent about calling list status",
+            "title": "Check calling list status"
+          }
+        }
+      }
+    ],
+    "document": {
+      "dsl": "1.0.0",
+      "name": "daily_calling_list",
+      "namespace": "base44",
+      "version": "1.0"
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "Agent Go Live Welcome",
+  "description": "Retired: the welcome email is now sent directly by the sending engine (sendWelcomes).",
+  "trigger": {
+    "condition": "${ false }",
+    "config": {
+      "trigger_type": "entity",
+      "events": [
+        "update"
+      ],
+      "entity_name": "AgentSettings"
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "agent_go_live_welcome",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "send_welcome": {
+          "call": "send_email",
+          "with": {
+            "template_name": "AgentWelcome",
+            "to": "${ .trigger.data.agent_email }",
+            "description": "Workspace access and personal messaging controls",
+            "variables": {
+              "first_name": "${ .trigger.data.first_name // .trigger.data.display_name }",
+              "brand_name": "${ .trigger.data.brand_name }",
+              "workspace_url": "${ \"https://\" + .trigger.data.domain + \"/dashboard\" }"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Send welcome email",
+            "description": "First activation only"
+          }
+        }
+      }
+    ]
+  }
+}

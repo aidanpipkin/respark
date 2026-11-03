@@ -1,0 +1,74 @@
+{
+  "name": "Engine Status Changes",
+  "description": "Retired: handled by the sending engine (syncChangedLeads / the reply pipeline run inside the worker).",
+  "trigger": {
+    "config": {
+      "trigger_type": "entity",
+      "entity_name": "MessageLog",
+      "events": [
+        "create"
+      ]
+    },
+    "condition": "${ false }"
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "engine_status_changes",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "sync_status": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "syncLead",
+            "args": {
+              "lead_id": "${ .trigger.data.lead_id }"
+            }
+          },
+          "then": "needs_alert",
+          "x-base44": {
+            "title": "Sync engine status",
+            "description": "Pipeline and messaging preferences"
+          }
+        }
+      },
+      {
+        "needs_alert": {
+          "switch": [
+            {
+              "when": "${ false }",
+              "then": "send_alert"
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ],
+          "x-base44": {
+            "title": "Agent attention needed?"
+          }
+        }
+      },
+      {
+        "send_alert": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "agentAlert",
+            "args": {
+              "lead_id": "${ .trigger.data.lead_id }",
+              "event_id": "${ .trigger.entity_id }"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Alert agent",
+            "description": "Configured notification phone"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "name": "CreditTransaction",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "amount_cents": {
+      "description": "Positive adds credit, negative uses credit",
+      "type": "integer"
+    },
+    "balance_after_cents": {
+      "type": "integer"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "dispatch_id": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "purchase",
+        "auto_recharge",
+        "text_usage",
+        "refund",
+        "adjustment"
+      ],
+      "type": "string"
+    },
+    "lead_id": {
+      "type": "string"
+    },
+    "segments": {
+      "type": "integer"
+    },
+    "stripe_payment_intent_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "kind",
+    "amount_cents"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false,
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

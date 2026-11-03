@@ -1,0 +1,47 @@
+{
+  "name": "Respark Test Monitor (Aidan only)",
+  "description": "TEST ONLY: every 5 minutes the Respark reply bot checks Aidan's own GHL contact (hLZmFD5Azf8WHCpBuk0d) for new texts and answers as Aidan. Touches no real leads. Archive once the real Respark Reply Monitor is live.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/5 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "respark_test_monitor",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "replyBotTest": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "aidanReply",
+            "args": {
+              "contact_id": "hLZmFD5Azf8WHCpBuk0d"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Reply bot answers Aidan's test texts",
+            "description": "Aidan's contact only"
+          }
+        }
+      }
+    ]
+  }
+}

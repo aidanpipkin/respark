@@ -1,0 +1,151 @@
+{
+  "name": "BillingAccount",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "auto_recharge": {
+      "default": false,
+      "type": "boolean"
+    },
+    "auto_recharge_consent_at": {
+      "type": "string"
+    },
+    "balance_cents": {
+      "default": 0,
+      "description": "Text credit balance in cents",
+      "type": "integer"
+    },
+    "brand": {
+      "type": "string"
+    },
+    "card_consent_at": {
+      "type": "string"
+    },
+    "exp_month": {
+      "type": "integer"
+    },
+    "exp_year": {
+      "type": "integer"
+    },
+    "last4": {
+      "type": "string"
+    },
+    "last_recharge_at": {
+      "type": "string"
+    },
+    "last_recharge_error": {
+      "type": "string"
+    },
+    "lifetime_texts": {
+      "default": 0,
+      "type": "integer"
+    },
+    "payment_method_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "recharge_amount_cents": {
+      "default": 2500,
+      "type": "integer"
+    },
+    "recharge_lock_token": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "recharge_lock_until": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "recharge_threshold_cents": {
+      "default": 1000,
+      "type": "integer"
+    },
+    "setup_intent_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "status": {
+      "default": "not_started",
+      "enum": [
+        "not_started",
+        "card_saved"
+      ],
+      "type": "string"
+    },
+    "stripe_customer_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "subscription_amount_cents": {
+      "description": "What the agent pays per month after any discount",
+      "type": "integer"
+    },
+    "subscription_cancel_at_period_end": {
+      "default": false,
+      "type": "boolean"
+    },
+    "subscription_checked_at": {
+      "type": "string"
+    },
+    "subscription_consent_at": {
+      "type": "string"
+    },
+    "subscription_discount": {
+      "description": "Readable discount, e.g. 50% off for 3 months (CODE)",
+      "type": "string"
+    },
+    "subscription_id": {
+      "rls": {
+        "read": false
+      },
+      "type": "string"
+    },
+    "subscription_period_end": {
+      "type": "string"
+    },
+    "subscription_status": {
+      "description": "Stripe status: active, trialing, past_due, incomplete, canceled, unpaid",
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false,
+    "read": {
+      "$or": [
+        {
+          "data.agent_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "type": "object"
+}

@@ -1,0 +1,45 @@
+{
+  "name": "Closed Client Guard",
+  "description": "Every 30 min: finds every GHL opportunity in a Closed / App Submitted / Policy Issued stage (or status won) and retires any Respark text record for those contacts so closed clients are never texted. Tags them \"Client - Do Not Text\".",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "7,37 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "closed_client_guard",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "guard": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "closedGuard",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Retire closed clients from texting",
+            "description": "closedGuard sweep"
+          }
+        }
+      }
+    ]
+  }
+}

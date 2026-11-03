@@ -1,0 +1,17 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useAction } from '@/lib/feedback';
+import { base44 } from '@/api/base44Client';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { call } from '@/components/workspace/api';
+export default function SequenceEditor({campaign,onClose}) {
+  const [edits,setEdits]=useState({});const {run,busy}=useAction();
+  const {data,isLoading,error:loadError}=useQuery({queryKey:['steps',campaign.id],queryFn:()=>base44.entities.SequenceStep.filter({campaign_id:campaign.id,...(campaign.cadence?{cadence:campaign.cadence}:{})},{sort:'step_number',limit:100})});
+  async function save(){
+    const changed=data.items.filter(s=>edits[s.id]!==undefined&&edits[s.id]!==s.body).length;
+    const ok=await run('save',async()=>{await call('saveCampaign',{action:'sequence',campaign_id:campaign.id,steps:data.items.map(s=>({id:s.id,body:edits[s.id]??s.body}))});return true;},{ok:'Sequence saved',detail:changed?`${changed} text${changed===1?'':'s'} updated. New follow-ups use this wording.`:'No wording changed.',invalidate:[['steps',campaign.id]],errTitle:'Sequence not saved'});
+    if(ok) onClose();
+  }
+  return <Dialog open onOpenChange={v=>!v&&onClose()}><DialogContent className="max-h-[92dvh] max-w-2xl overflow-auto"><DialogHeader><DialogTitle>Your follow-up sequence</DialogTitle><DialogDescription>{data?.items?.length?`${new Set(data.items.map(x=>x.step_number)).size} texts over ${Math.max(...data.items.map(x=>Number(x.day_offset)||0))+1} days.`:''}{campaign.personalize_sequence!==false&&campaign.writer_prompt?' The AI writes each text for the specific lead around the step’s goal; the wording below is the approved reference and the fallback if a personalized text ever fails a check.':' Original A2P sample wording is preserved until you edit it.'}</DialogDescription></DialogHeader>{isLoading?<p className="subtext">Loading sequence…</p>:loadError?<p className="text-destructive">{loadError.message}</p>:<div className="space-y-5">{data.items.map(step=><div key={step.id} className="relative border-l-2 border-primary/20 pl-4"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-semibold">Message {step.step_number}{step.variant==='none'?'':step.variant} · {step.lever}</span><span className="shrink-0 rounded bg-muted px-2 py-1 text-[10px]">Day {step.day_offset}</span></div>{step.brief&&<p className="mb-2 rounded-lg bg-muted/50 p-2 text-[11px] leading-5 text-muted-foreground"><span className="font-semibold text-foreground">Goal: </span>{step.brief}</p>}<textarea className="field min-h-28 text-xs leading-6" aria-label={`Message ${step.step_number} ${step.variant}`} maxLength={1600} value={edits[step.id]??step.body} onChange={e=>setEdits({...edits,[step.id]:e.target.value})}/><div className="mt-1 flex justify-between text-[10px] text-muted-foreground"><span>{step.requires_step1_delivered?'Requires delivery of message 1':'Opening message · A/B variant'}</span><span>{(edits[step.id]??step.body).length} chars</span></div></div>)}</div>}<div className="flex justify-end gap-2 border-t pt-4"><Button variant="outline" onClick={onClose}>Cancel</Button><Button loading={busy==='save'} disabled={!data} onClick={save}>{busy==='save'?'Saving':'Save sequence'}</Button></div></DialogContent></Dialog>;
+}

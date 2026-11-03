@@ -1,0 +1,79 @@
+{
+  "name": "PromptVersion",
+  "properties": {
+    "agent_email": {
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "campaign_id": {
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "knowledge_doc": {
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "location_id": {
+      "rls": {
+        "read": false,
+        "write": false
+      },
+      "type": "string"
+    },
+    "notes": {
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "system_prompt": {
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    },
+    "version": {
+      "rls": {
+        "write": false
+      },
+      "type": "number"
+    },
+    "writer_prompt": {
+      "rls": {
+        "write": false
+      },
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "location_id",
+    "campaign_id",
+    "version"
+  ],
+  "type": "object",
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}

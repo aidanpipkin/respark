@@ -1,0 +1,59 @@
+{
+  "name": "ProvisioningLog",
+  "type": "object",
+  "properties": {
+    "agent_email": {
+      "type": "string"
+    },
+    "location_id": {
+      "type": "string"
+    },
+    "step": {
+      "type": [
+        "integer",
+        "string"
+      ]
+    },
+    "object_type": {
+      "type": "string"
+    },
+    "object_name": {
+      "type": "string"
+    },
+    "object_id": {
+      "type": "string"
+    },
+    "request_summary": {
+      "type": "string"
+    },
+    "response_status": {
+      "type": "integer"
+    },
+    "created_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_email",
+    "step",
+    "object_type"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": false
+  }
+}
