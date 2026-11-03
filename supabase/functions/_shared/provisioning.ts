@@ -16,13 +16,13 @@ export async function setup(req) {
  if (!settings) throw new Error('Save the agent profile first.');
  return { ...ctx, input, settings, config: await platform(ctx.base44) };
 }
-export async function request(settings, path, method = 'GET', body, agency = false) {
+export async function request(settings: any, path: string, method = 'GET', body?: any, agency = false): Promise<{ data: any; status: number }> {
  // Agency calls use the marketplace OAuth token when provided by the caller, else the stored private token.
  const credential = agency ? (settings?.__agency_token || secrets.get('RESPARK_GHL_AGENCY_TOKEN')) : settings?.ghl_token;
  if (!credential) throw new Error(agency ? 'Set the agency credential in platform secrets first.' : 'Save and verify this agent’s workspace credential first.');
  const res = await fetch(`https://services.leadconnectorhq.com${path}`, { method, headers: { Authorization: `Bearer ${credential}`, Version: path.startsWith('/conversations') ? '2021-04-15' : '2021-07-28', Accept: 'application/json', 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(20000) });
  const text = await res.text(); let data; try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
- if (!res.ok) { const error = new Error(`Provider request failed (${res.status}). ${String(data.message || data.error || 'Review endpoint access and permissions.').slice(0,250)}`); error.status = res.status; throw error; }
+ if (!res.ok) { const error: any = new Error(`Provider request failed (${res.status}). ${String(data.message || data.error || 'Review endpoint access and permissions.').slice(0,250)}`); error.status = res.status; throw error; }
  return { data, status: res.status };
 }
 export async function log(base44, settings, step, type, name, id, method, status = 200) {
