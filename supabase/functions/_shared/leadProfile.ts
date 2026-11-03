@@ -155,6 +155,9 @@ export async function leadProfile(base44: any, s: any, lead: any, force = false)
     } catch { contact.__notes = []; }
   }
   const profile = profileFromContact(s, lead, contact);
-  await base44.asServiceRole.entities.Lead.update(lead.id, { lead_snapshot: { ...(lead.lead_snapshot || {}), profile, fetched_at: new Date().toISOString() } });
+  const saved = await base44.asServiceRole.entities.Lead.update(lead.id, { lead_snapshot: { ...(lead.lead_snapshot || {}), profile, fetched_at: new Date().toISOString() } });
+  // Keep the caller's lead current: the send lock (lockLead) compares updated_date, so a stale copy after this
+  // write made every first send to a lead throw Busy and wait for the next run.
+  if (saved && typeof saved === 'object' && saved.id === lead.id) Object.assign(lead, saved);
   return profile;
 }
