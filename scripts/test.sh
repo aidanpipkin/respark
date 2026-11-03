@@ -35,7 +35,12 @@ if [ -z "${TEST_DATABASE_URL:-}" ]; then
   trap '[ "$STARTED" = 1 ] && run "pg_ctl -D '"'"'$DATA'"'"' stop -m fast >/dev/null" || true' EXIT
   PSQL="psql -h 127.0.0.1 -p $PORT -U postgres -v ON_ERROR_STOP=1 -q"
   $PSQL -c "drop database if exists respark_test" -c "create database respark_test" >/dev/null
-  $PSQL -d respark_test -f "$ROOT/scripts/test/auth_stub.sql" -f "$ROOT/supabase/migrations/0001_schema.sql" >/dev/null
+  $PSQL -d respark_test -f "$ROOT/scripts/test/auth_stub.sql" >/dev/null
+  # Every migration except the pg_cron/pg_net one (0002), which needs the Supabase extensions and Vault.
+  for m in "$ROOT"/supabase/migrations/*.sql; do
+    case "$(basename "$m")" in 0002_*) continue ;; esac
+    $PSQL -d respark_test -f "$m" >/dev/null
+  done
   export TEST_DATABASE_URL="postgres://postgres@127.0.0.1:$PORT/respark_test"
 fi
 
