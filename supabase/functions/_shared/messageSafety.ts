@@ -1,0 +1,26 @@
+import { ghl,agentSettings } from './ghl.ts';
+import { isRehearsal, isTestLead } from './rehearsal.ts';
+import { clockOpen } from './messageClock.ts';
+import { freshLead } from './followUpSchedule.ts';
+export function basicSafety(s,lead,source,checkClock=true){
+ // Fictional 555-01xx test leads are never texted for real, so the texting-number and carrier-registration
+ // gates do not apply to them (an agent still setting up can exercise the engine). Everything else applies.
+ const fictional=isTestLead(lead);
+ if(fictional){if(!s||!s.connected||!s.location_id)throw new Error('Your workspace must be connected before test leads can be messaged.');if(s.status==='paused')throw new Error('Messaging is paused.');}
+ else{if(!s||!s.connected||!s.ghl_token||!s.location_id||!s.phone_number)throw new Error('Messaging connection and texting number must be configured.');
+ const test=s.test_phone_numbers?.includes(lead.phone)&&s.onboarding_checks?.test_numbers_consent===true;if(s.status!=='live'&&!test)throw new Error('This account is not live.');if(s.status==='paused'||s.a2p_status!=='approved')throw new Error('Messaging is paused or carrier registration is not approved.');}
+ if(lead.agent_email!==s.agent_email||lead.location_id!==s.location_id||!lead.ghl_contact_id)throw new Error('Contact access denied.');
+ if(['opted_out','not_interested'].includes(lead.status))throw new Error('This contact must not be messaged.');
+ if(!lead.consent_source||!lead.consent_date||!(lead.consent_wording||lead.consent_text)||!lead.consent_seller_named||!lead.dnc_checked)throw new Error('Documented SMS consent and a DNC check are required.');
+ if(!s.licensed_states?.includes(lead.state))throw new Error('Contact is outside the licensed states.');if(!lead.timezone)throw new Error('Confirm the contact’s timezone before sending.');
+ if(source==='sequence'&&(lead.sequence_paused||!['queued','in_sequence'].includes(lead.status)||lead.last_inbound_at))throw new Error('Follow-up series is paused or the contact already replied.');
+ if(source==='ai'&&(lead.ai_paused||['needs_human','closed','booked','held'].includes(lead.status)))throw new Error('Automatic replies are paused.');
+ if(source==='track'&&(!lead.track||['needs_human','booked'].includes(lead.status)))throw new Error('This contact is no longer in a follow-up track.');
+ if(source==='service'&&lead.status!=='client')throw new Error('Client texts are only for closed policies.');
+ if(source==='nudge'&&(lead.ai_paused||!['replied','engaged'].includes(lead.status)))throw new Error('This conversation is no longer waiting on a follow-up.');
+ if(source==='nurture'&&(lead.status!=='closed'||!lead.next_nurture_at))throw new Error('This contact is not scheduled for a check-in.');
+ if(checkClock&&!isTestLead(lead)&&!clockOpen(s,lead.timezone,['sequence','nudge','nurture','track'].includes(source)&&!(source==='sequence'&&freshLead(lead))))throw new Error('Outside the permitted sending hours in the contact’s timezone.');
+}
+/** `pre` carries objects the caller already holds (settings, campaign) so they are not read again. */
+export async function checkSafety(base44,lead,source,checkClock=true,automatic=false,pre:any={}){const s=(pre.settings&&pre.settings.agent_email===lead.agent_email)?pre.settings:await agentSettings(base44,lead.agent_email,automatic);basicSafety(s,lead,source,checkClock);if(['sequence','ai','booking','nudge','nurture'].includes(source)||(source==='reminder'&&lead.campaign_id)){if(!lead.campaign_id)throw new Error('Campaign enrollment is required.');const campaign=(pre.campaign&&pre.campaign.id===lead.campaign_id)?pre.campaign:await base44.asServiceRole.entities.Campaign.get(lead.campaign_id);if(campaign.agent_email!==s.agent_email||campaign.location_id!==s.location_id)throw new Error('The campaign is not active.');if(campaign.status!=='active'&&!(isTestLead(lead)&&campaign.status==='draft')){const e:any=new Error(campaign.status==='paused'?'The campaign is paused.':'The campaign has not started.');e.name='CampaignInactive';throw e;}// Review mode applies to conversational AI replies. Pre-written follow-up steps send directly unless the campaign opts into review_sequence.
+const reviewable=source!=='sequence'||campaign.review_sequence===true;if(automatic&&reviewable&&(s.mode!=='autopilot'||campaign.mode!=='autopilot'))throw new Error('This message now requires approval.');}if(isRehearsal(s)||isTestLead(lead))return {s,contact:{phone:lead.phone,state:lead.state,locationId:s.location_id}};const {contact}=await ghl(s,`/contacts/${encodeURIComponent(lead.ghl_contact_id)}`);if(!contact||contact.locationId!==s.location_id||contact.phone!==lead.phone)throw new Error('Contact details changed. Synchronize before sending.');if(contact.dnd||contact.dndSettings?.SMS?.status==='active'||contact.tags?.includes('respark-opted-out'))throw new Error('Contact is marked do not contact.');if(contact.state&&contact.state!==lead.state)throw new Error('Contact state changed. Review eligibility first.');return {s,contact};}

@@ -121,6 +121,8 @@ create extension if not exists pgcrypto;
 create or replace function public.set_updated_date() returns trigger
 language plpgsql as $$
 begin
+  -- scripts/import-base44.ts sets respark.import=on so imported rows keep their original updated_date.
+  if coalesce(current_setting('respark.import', true), '') = 'on' then return new; end if;
   new.updated_date = now();
   return new;
 end $$;
