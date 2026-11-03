@@ -1,0 +1,28 @@
+import { createClientFromRequest } from '../_shared/runtime.ts';
+import { resilient } from '../_shared/entityRetry.ts';
+import { resolvePublicAgent,consentText,products,states } from '../_shared/publicSite.ts';
+import { syncWebsiteInquiry,notifyWebsiteInquiry } from '../_shared/websiteInquiry.ts';
+import { agentSettings } from '../_shared/ghl.ts';
+import { saveWebsiteIntake } from '../_shared/websiteIntake.ts';
+const proper=value=>String(value||'').trim().toLocaleLowerCase('en-US').replace(/(^|[\s'-])\p{L}/gu,c=>c.toLocaleUpperCase('en-US'));
+export default async function(req){
+ try{
+  if(req.method!=='POST')return Response.json({error:'Method not allowed'},{status:405});const raw=await req.text();if(raw.length>14000)throw new Error('Form is too large.');const input=JSON.parse(raw);const base44=resilient(createClientFromRequest(req));const E=base44.asServiceRole.entities;
+  if(input.action==='retry'){const user=await base44.auth.me();if(user?.role!=='admin')return Response.json({error:'Administrator access required.'},{status:403});const page=await E.WebsiteSubmission.filter({lead_id:String(input.lead_id||'')},{sort:'-submitted_at',limit:1});const row=page.items[0];if(!row)throw new Error('Website inquiry not found.');const s=await agentSettings(base44,row.agent_email);const synced=row.sync_status==='synced'||await syncWebsiteInquiry(base44,s,row);await notifyWebsiteInquiry(base44,s,row);return Response.json({accepted:true,synced});}
+  if(input.website)return Response.json({accepted:true});
+  // Agent mini-sites live at /a/{slug}/get-info; resolve that agent strictly (no fallback to the owner).
+  const hosted=String((()=>{try{return new URL(String(input.page_url||'')).pathname;}catch{return '';}})()).match(/^\/a\/([a-z0-9-]{2,60})\/get-info$/);
+  const s=await resolvePublicAgent(base44,hosted?{agent:hosted[1],strict:true}:input);const first=proper(input.first_name),last=proper(input.last_name);const email=String(input.email||'').trim().toLowerCase();let phone=String(input.phone||'').replace(/[\s().-]/g,'');if(/^\d{10}$/.test(phone))phone=`+1${phone}`;else if(/^1\d{10}$/.test(phone))phone=`+${phone}`;
+  if(!first||!last||first.length>80||last.length>80||! /^[\p{L}\p{M} '\-]+$/u.test(first+last))throw new Error('Enter your first and last name.');
+  if(email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Enter a valid email.');if(!/^\+[1-9]\d{7,14}$/.test(phone))throw new Error('Enter a valid phone number.');if(!states.includes(input.state)||!products.includes(input.product_interest))throw new Error('Choose your state and product interest.');if(typeof input.consent_checked!=='boolean')throw new Error('Invalid consent choice.');
+  if(!/^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i.test(String(input.request_key||'')))throw new Error('Please reload the form and try again.');
+  const pageUrl=new URL(String(input.page_url||''));if(!['http:','https:'].includes(pageUrl.protocol)||(pageUrl.pathname!=='/get-info'&&!hosted)||pageUrl.href.length>2000)throw new Error('Invalid form page.');const siteHost=String(input.host||'').toLowerCase();if(pageUrl.hostname.toLowerCase()!==siteHost)throw new Error('Invalid form origin.');
+  const prior=await E.WebsiteSubmission.filter({request_key:input.request_key,agent_email:s.agent_email},{limit:1});if(prior.items[0]?.lead_id)return Response.json({accepted:true});
+  const ip=(req.headers.get('cf-connecting-ip')||req.headers.get('x-forwarded-for')?.split(',')[0]||'unknown').trim().slice(0,64);const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`${s.agent_email}|${ip}`));const ipHash=Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');const now=new Date().toISOString();
+  // Ceiling per agent across all IPs, so rotating addresses cannot flood an agent's GHL with fake leads.
+  const agentHour=await E.WebsiteSubmission.count({agent_email:s.agent_email,submitted_at:{$gte:new Date(Date.now()-3600000).toISOString()}});if(!prior.items[0]&&agentHour>=40)return Response.json({error:'We are receiving a lot of requests right now. Please try again in a little while.'},{status:429});
+  const [attempts,phoneAttempts]=await Promise.all([E.WebsiteSubmission.count({agent_email:s.agent_email,ip_hash:ipHash,submitted_at:{$gte:new Date(Date.now()-3600000).toISOString()}}),E.WebsiteSubmission.count({agent_email:s.agent_email,phone,submitted_at:{$gte:new Date(Date.now()-1800000).toISOString()}})]);if(!prior.items[0]&&(attempts>=5||phoneAttempts>=2))return Response.json({error:'Please wait before sending another request.'},{status:429});
+  const text=consentText(s);const row=await saveWebsiteIntake(base44,s,prior.items[0],{request_key:input.request_key,agent_email:s.agent_email,ip_hash:ipHash,submitted_at:now,first_name:first,last_name:last,email,phone,state:input.state,product_interest:input.product_interest,consent_checked:input.consent_checked,consent_text:text,sync_status:'received'},{ip,user_agent:(req.headers.get('user-agent')||String(input.user_agent||'')).slice(0,500),page_url:pageUrl.href});
+  await syncWebsiteInquiry(base44,s,row);await notifyWebsiteInquiry(base44,s,row);return Response.json({accepted:true});
+ }catch(e){return Response.json({error:e.message?.startsWith('Entity')?'Unable to save your request. Please try again.':e.message||'Unable to save your request.'},{status:400});}
+}

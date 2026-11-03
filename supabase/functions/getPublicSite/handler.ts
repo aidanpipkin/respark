@@ -1,0 +1,4 @@
+import { createClientFromRequest } from '../_shared/runtime.ts';
+import { resilient } from '../_shared/entityRetry.ts';
+import { resolvePublicAgent,safePublicSite } from '../_shared/publicSite.ts';
+export default async function(req){try{if(req.method!=='POST')return Response.json({error:'Method not allowed'},{status:405});const input=await req.json();const base44=resilient(createClientFromRequest(req));const s=await resolvePublicAgent(base44,input.slug?{agent:String(input.slug),strict:true}:input);return Response.json(await safePublicSite(base44,s),{headers:{'Cache-Control':'no-store'}});}catch(e){return Response.json({error:e.status===404?e.message:'Unable to load this website.'},{status:e.status||400});}}
