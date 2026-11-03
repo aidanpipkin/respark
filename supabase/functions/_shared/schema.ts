@@ -32,6 +32,7 @@ export const ENTITIES: Record<string, EntityMeta> = {
       "last_checked_at": "text",
       "last_name": "text",
       "legal_business_name": "text",
+      "licensed_states": "jsonb",
       "messaging_service_sid": "text",
       "mobile_phone": "text",
       "npn": "text",

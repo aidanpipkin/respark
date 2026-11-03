@@ -21,6 +21,7 @@ service role key, which `auth.me()` maps to the platform admin).
 |---|---|---|
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL` | runtime, entities | Injected by Supabase. Auth verification, service-role detection, `functions.invoke`, Postgres. `DATABASE_URL` is the local-test fallback for `SUPABASE_DB_URL`. |
 | `PLATFORM_OWNER_EMAIL` | runtime | Email reported by `auth.me()` for service-role (cron) calls. |
+| `CRON_SECRET` | runtime | Shared secret pg_cron / triggers send as `x-cron-secret` (Vault `cron_secret`); treated like the service role. |
 | `APP_URL` | runtime `serve()`, `agentSite.ts`, `appointmentJourney.ts` | Public web-app origin: stands in for `x-base44-app-url`, and builds inbox / calendar links in texts and emails. |
 | `FUNCTIONS_URL` (optional) | runtime `functionUrl()` | Public base of the edge functions when not `${SUPABASE_URL}/functions/v1` (custom domain). Used for the lead webhook URL shown in `leadWebhookSettings`. |
 | `FUNCTION_INVOKE_TIMEOUT_MS` (optional) | runtime | Timeout for `functions.invoke` (sequenceSender fan-out); default 150000. |

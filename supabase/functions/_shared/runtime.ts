@@ -7,6 +7,7 @@
 //   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_DB_URL   (injected by Supabase)
 //   APP_URL                 public web app origin, stands in for the x-base44-app-url header
 //   PLATFORM_OWNER_EMAIL    identity reported by auth.me() for service-role (cron) calls
+//   CRON_SECRET             shared secret pg_cron sends as x-cron-secret (Vault `cron_secret`); same identity as the service role
 //   RESEND_API_KEY, FROM_EMAIL                     SendEmail
 //   ANTHROPIC_API_KEY, LLM_MODEL (optional)        InvokeLLM
 //   STORAGE_BUCKET (default "uploads")             CreateFileSignedUrl / UploadFile
@@ -93,14 +94,25 @@ function bearer(req: Request): string {
 
 export type User = { id: string; email: string; full_name: string; role: 'admin' | 'agent' | 'user'; roles: string[]; service_role?: boolean };
 
+const SYSTEM_USER = (): User => ({ id: 'service-role', email: (Deno.env.get('PLATFORM_OWNER_EMAIL') || '').toLowerCase(), full_name: 'System', role: 'admin', roles: ['admin'], service_role: true });
+
+function timingSafeEqual(a: string, b: string): boolean {
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return out === 0;
+}
+
 async function resolveUser(req: Request): Promise<User | null> {
+  // pg_cron / Postgres triggers identify themselves with a shared secret (Vault `cron_secret` = env `CRON_SECRET`)
+  // instead of carrying the service role key through the database.
+  const cronSecret = Deno.env.get('CRON_SECRET') || '';
+  const sent = req.headers.get('x-cron-secret') || '';
+  if (cronSecret && sent && sent.length === cronSecret.length && timingSafeEqual(sent, cronSecret)) return SYSTEM_USER();
   const token = bearer(req);
   if (!token) return null;
   // Cron (pg_cron / scheduled functions) and function-to-function calls send the service role key.
   // Base44 ran workflows as the app owner, so they land in the code's admin paths.
-  if (token === env('SUPABASE_SERVICE_ROLE_KEY')) {
-    return { id: 'service-role', email: (Deno.env.get('PLATFORM_OWNER_EMAIL') || '').toLowerCase(), full_name: 'System', role: 'admin', roles: ['admin'], service_role: true };
-  }
+  if (token === env('SUPABASE_SERVICE_ROLE_KEY')) return SYSTEM_USER();
   const anon = createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), { auth: { persistSession: false, autoRefreshToken: false } });
   const { data, error } = await anon.auth.getUser(token);
   if (error || !data?.user) return null;
