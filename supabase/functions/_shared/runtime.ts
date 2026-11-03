@@ -230,6 +230,17 @@ export async function uploadFile(args: { file: Blob | Uint8Array | ArrayBuffer; 
   return { file_uri: path, file_url: data.publicUrl };
 }
 
+/**
+ * Public URL of an edge function, for webhook addresses shown to admins/agents and pasted into
+ * vendors. Base44 served functions at `${app}/functions/<name>`; Supabase serves them at
+ * `${SUPABASE_URL}/functions/v1/<name>` (override the base with FUNCTIONS_URL, e.g. a custom domain).
+ */
+export function functionUrl(name: string): string {
+  if (!/^[A-Za-z0-9_-]+$/.test(name)) throw new Error(`Bad function name ${name}`);
+  const base = (Deno.env.get('FUNCTIONS_URL') || `${env('SUPABASE_URL')}/functions/v1`).replace(/\/$/, '');
+  return `${base}/${name}`;
+}
+
 /** Calls another edge function the way Base44's functions.invoke did; the callee sees an admin (service-role) caller. */
 export async function invokeFunction(name: string, body: unknown = {}, headers: Record<string, string> = {}): Promise<{ data: unknown; status: number }> {
   if (!/^[A-Za-z0-9_-]+$/.test(name)) throw new Error(`Bad function name ${name}`);
