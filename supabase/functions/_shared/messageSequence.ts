@@ -24,6 +24,16 @@ export const MAX_PER_24H = 3;
 /** The cadence this lead runs on (fixed when they start, so switching a campaign never reshuffles a lead mid-series). */
 export const cadenceOf = (lead: any, campaign: any) => lead.cadence || campaign?.cadence || '';
 
+/**
+ * A lead still inside the "just arrived" window: came through the lead webhook and started the series
+ * less than a day ago. Steps marked `fresh_only` (same-day bursts) go only to these leads.
+ */
+export function freshSeries(lead: any, now = Date.now()) {
+  if (!String(lead?.import_batch || '').startsWith('webhook')) return false;
+  const started = Date.parse(lead?.sequence_started_at || lead?.created_date || '') || now;
+  return now - started < DAY;
+}
+
 function stepQuery(campaign: any, cadence: string, number: number, variant: string) {
   const q: any = { campaign_id: campaign.id, step_number: number, variant };
   if (cadence) q.cadence = cadence;
@@ -54,7 +64,10 @@ export async function composeStep(base44: any, s: any, lead: any, campaign: any,
   const previous = (ctx?.turns || []).filter((t: any) => t.direction === 'outbound').slice(-12).map((t: any) => t.text);
   const written = await writeStep(base44, s, lead, campaign, step, profile, previous, ctx);
   const text = written.text;
-  if (/\{[^}]+\}/.test(text) || !guardrailCheck(text).passed) throw new Error('Follow-up message failed safety checks.');
+  if (/\{[^}]+\}/.test(text)) throw new Error('Follow-up message failed safety checks.');
+  // Verbatim steps are agent-approved copy sent as written: wording flags are logged, not enforced.
+  const guard = guardrailCheck(text);
+  if (!guard.passed) { if (step.verbatim === true) console.warn('[sequence] verbatim step sent with guardrail flags', step.step_number, guard.flags); else throw new Error('Follow-up message failed safety checks.'); }
   return { text, template, personalization: { personalized: written.personalized, angle: written.angle, facts_used: written.facts_used, model: written.model, rewrites: written.attempts.length, fallback_reason: written.personalized ? '' : (written.attempts.at(-1)?.flags || ['Personalization off']).join('; ').slice(0, 300) } };
 }
 
@@ -66,12 +79,25 @@ async function nextStep(E: any, s: any, lead: any, campaign: any, cadence: strin
   const q: any = { campaign_id: lead.campaign_id, step_number: { $gt: number }, variant: { $in: ['none', 'A'] } };
   if (cadence) q.cadence = cadence;
   const items = steps ? matchSteps(steps, q).sort((a, b) => Number(a.step_number) - Number(b.step_number)).slice(0, 15) : (await E.SequenceStep.filter(q, { sort: 'step_number', limit: 15 })).items;
+  const rules = campaign?.send_rules || null;
+  const fresh = freshSeries(lead);
+  const tz = lead.timezone || s.home_timezone || 'America/Chicago';
   for (const step of items) {
+    // Same-day burst steps exist only for leads that just arrived; everyone else skips past them.
+    if (step.fresh_only === true && !fresh) continue;
     // Fictional test leads run the series on a compressed clock (one step every 10 minutes, any hour), so an
     // agent can watch the whole thing the same day instead of over 60 days.
     if (isTestLead(lead)) return { step, at: new Date(Date.now() + 10 * 60000).toISOString(), skipped: 0 };
+    // Minutes after the previous text (fresh-lead bursts), clamped into the sending window.
+    if (Number(step.offset_minutes) > 0) {
+      const base = Date.parse(lead.last_outbound_at || '') || Date.now();
+      const want = Math.max(Date.now() + 60000, base + Number(step.offset_minutes) * 60000);
+      const open = cadence ? cadenceOpen(s, tz, want, rules, lead.state) : clockOpen(s, lead.timezone, false, new Date(want));
+      const at = open ? new Date(want).toISOString() : cadence ? nextCadenceWindow(s, tz, want, rules, lead.state) : nextWindow(s, lead.timezone, want, false);
+      return { step, at, skipped: step.step_number - number - 1 };
+    }
     if (cadence && step.slot) {
-      const at = stepTime(s, lead, started, step.day_offset || 0, step.slot, ['breakup', 'close'].includes(step.kind));
+      const at = stepTime(s, lead, started, step.day_offset || 0, step.slot, ['breakup', 'close'].includes(step.kind), rules);
       if (!at) continue; // Sunday or holiday
       return { step, at: new Date(Math.max(Date.parse(at), Date.now() + 60000)).toISOString(), skipped: step.step_number - number - 1 };
     }
@@ -110,11 +136,12 @@ export async function runSequenceLead(base44: any, s: any, lead: any, campaign: 
   basicSafety(s, lead, 'sequence', false);
   const cadence = cadenceOf(lead, campaign);
   const tz = lead.timezone || s.home_timezone || 'America/Chicago';
+  const rules = campaign?.send_rules || null;
 
   // Sending window (fictional test leads ignore it, and the 3-per-day cap: nothing reaches a phone).
   const test = isTestLead(lead);
   if (test) { /* always open */ } else if (cadence) {
-    if (!cadenceOpen(s, tz)) { await E.Lead.update(lead.id, { next_send_at: nextCadenceWindow(s, tz, Date.now() + 300000) }); return { skipped: 'sending window' }; }
+    if (!cadenceOpen(s, tz, Date.now(), rules, lead.state)) { await E.Lead.update(lead.id, { next_send_at: nextCadenceWindow(s, tz, Date.now() + 300000, rules, lead.state) }); return { skipped: 'sending window' }; }
   } else if (!clockOpen(s, lead.timezone, !freshLead(lead))) {
     await E.Lead.update(lead.id, { next_send_at: nextWindow(s, lead.timezone, Date.now() + 300000, !freshLead(lead)) });
     return { skipped: 'sending window' };
@@ -126,13 +153,16 @@ export async function runSequenceLead(base44: any, s: any, lead: any, campaign: 
   const recent = test ? { count: 0, oldest: '' } : await recentSends(E, s, lead);
   if (recent.count >= MAX_PER_24H) {
     const free = Date.parse(recent.oldest) + DAY + 5 * 60000;
-    await E.Lead.update(lead.id, { next_send_at: cadence ? nextCadenceWindow(s, tz, free) : nextWindow(s, lead.timezone, free) });
+    await E.Lead.update(lead.id, { next_send_at: cadence ? nextCadenceWindow(s, tz, free, rules, lead.state) : nextWindow(s, lead.timezone, free) });
     return { skipped: 'contact limit' };
   }
 
   const variant = lead.variant || campaign.ab_winner || ((lead.id.charCodeAt(lead.id.length - 1) % 2) ? 'A' : 'B');
   const q = stepQuery(campaign, cadence, number, number === 1 ? variant : 'none');
-  const step = ctx.steps ? matchSteps(ctx.steps, q)[0] : (await E.SequenceStep.filter(q, { limit: 1 })).items[0];
+  // A step may exist twice, as a fresh-lead version (`fresh_only`) and the regular one; pick by the lead's arrival.
+  const candidates: any[] = ctx.steps ? matchSteps(ctx.steps, q) : (await E.SequenceStep.filter(q, { limit: 4 })).items;
+  const fresh = freshSeries(lead);
+  const step = candidates.find((st: any) => !!st.fresh_only === fresh) || candidates.find((st: any) => !st.fresh_only);
   if (!step) return { skipped: 'no step' };
   const startPatch: any = {};
   if (!lead.variant) startPatch.variant = variant;

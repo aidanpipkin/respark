@@ -53,7 +53,7 @@ export function ensureAiDisclosure(text: string, id: any) {
 }
 
 export function fillTemplate(body: string, lead: any, s: any) {
-  const values: Record<string, string> = { first: lead.first_name || 'there', agent: String(s.first_name || s.display_name || '').split(/\s+/)[0], agency: s.brand_name || s.legal_business_name || '' };
+  const values: Record<string, string> = { first: lead.first_name || 'there', agent: String(s.first_name || s.display_name || '').split(/\s+/)[0], agency: s.brand_name || s.legal_business_name || '', state: lead.state || 'the same state' };
   return String(body || '').replace(/\{([a-z_]+)\}/g, (m, k) => values[k] || m);
 }
 
@@ -132,6 +132,8 @@ export async function writeStep(base44: any, s: any, lead: any, campaign: any, s
   const id = identity(s, campaign, lead);
   // The approved fallback text carries the disclosure too, so a CA/UT opener is never sent without it.
   const template = kindOf(step) === 'opener' ? ensureAiDisclosure(fillTemplate(step.body, lead, s), id) : fillTemplate(step.body, lead, s);
+  // Verbatim steps (agent-written copy) are sent as written: only the name/state tokens are filled.
+  if (step.verbatim === true) return { text: template, personalized: false, angle: step.lever || '', facts_used: [], attempts: [], model: 'verbatim' };
   if (campaign.personalize_sequence === false || !campaign.writer_prompt) {
     return { text: template, personalized: false, angle: step.lever || '', facts_used: [], attempts: [], model: '' };
   }

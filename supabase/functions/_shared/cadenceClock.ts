@@ -8,6 +8,26 @@ import { isRehearsal } from './rehearsal.ts';
 const OPEN = 9 * 60 + 30, CLOSE = 18 * 60 + 30;
 const SLOTS: Record<string, [number, number]> = { am: [10 * 60, 12 * 60], pm: [14 * 60 + 30, 17 * 60 + 30] };
 
+/**
+ * Campaign-level overrides (campaign.send_rules), all optional:
+ *   weekday: { open, close }        Mon-Sat hours instead of 9:30-6:30 ("HH:MM", lead-local)
+ *   sunday: { open, close }         allow Sunday sends inside these hours (default: no Sundays)
+ *   no_sunday_states: ['AL', ...]   states that keep the no-Sunday rule even when `sunday` is set
+ * Federal holidays are always skipped.
+ */
+export type SendRules = { weekday?: { open: string; close: string }; sunday?: { open: string; close: string }; no_sunday_states?: string[] };
+const toMin = (t: string | undefined, dflt: number) => { const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(t || '')); return m ? Number(m[1]) * 60 + Number(m[2]) : dflt; };
+const isSunday = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay() === 0;
+function sundayOk(rules?: SendRules | null, state?: string) {
+  if (!rules?.sunday) return false;
+  return !(rules.no_sunday_states || []).map(x => String(x).toUpperCase()).includes(String(state || '').toUpperCase());
+}
+/** Open/close minutes for the local day `date` under the rules (null when nothing may go out that day). */
+function hoursFor(date: string, rules?: SendRules | null, state?: string): [number, number] | null {
+  if (isSunday(date)) return sundayOk(rules, state) ? [toMin(rules!.sunday!.open, 12 * 60), toMin(rules!.sunday!.close, 19 * 60 + 30)] : null;
+  return [toMin(rules?.weekday?.open, OPEN), toMin(rules?.weekday?.close, CLOSE)];
+}
+
 function nth(year: number, month: number, weekday: number, n: number) { // nth weekday of month (n = -1: last)
   if (n > 0) { const first = new Date(Date.UTC(year, month, 1)).getUTCDay(); return 1 + ((weekday - first + 7) % 7) + (n - 1) * 7; }
   const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate(); const lastW = new Date(Date.UTC(year, month, lastDay)).getUTCDay();
@@ -32,18 +52,19 @@ export function holidays(y: number) {
 }
 
 /** Is this a day follow-ups may go out (not Sunday, not a federal holiday) in this time zone? */
-export function sendingDay(at: number | Date, tz: string) {
+export function sendingDay(at: number | Date, tz: string, rules?: SendRules | null, state?: string) {
   const p = localParts(at, tz);
-  const weekday = new Date(`${p.date}T12:00:00Z`).getUTCDay();
-  return weekday !== 0 && !holidays(Number(p.year)).has(p.date);
+  if (holidays(Number(p.year)).has(p.date)) return false;
+  return !isSunday(p.date) || sundayOk(rules, state);
 }
 
 /** May a cadence follow-up go out right now? */
-export function cadenceOpen(s: any, tz: string, at: number | Date = Date.now()) {
+export function cadenceOpen(s: any, tz: string, at: number | Date = Date.now(), rules?: SendRules | null, state?: string) {
   if (isRehearsal(s)) return true;
-  if (!sendingDay(at, tz)) return false;
-  const m = localParts(at, tz).minutes;
-  return m >= OPEN && m < CLOSE;
+  if (!sendingDay(at, tz, rules, state)) return false;
+  const p = localParts(at, tz);
+  const h = hoursFor(p.date, rules, state);
+  return !!h && p.minutes >= h[0] && p.minutes < h[1];
 }
 
 /** Stable per-lead spread across the window so a list never goes out in one burst. */
@@ -56,20 +77,23 @@ function spread(leadId: string, span: number) {
  * When a step is due: the lead's start date plus `day` days, inside the step's slot, at a minute
  * that's stable for this lead. Returns null if that day is a Sunday or holiday (the step is skipped).
  */
-export function stepTime(s: any, lead: any, startedIso: string, day: number, slot: string, mustSend = false) {
+export function stepTime(s: any, lead: any, startedIso: string, day: number, slot: string, mustSend = false, rules?: SendRules | null) {
   const tz = lead.timezone || s.home_timezone || 'America/Chicago';
   const start = localParts(Date.parse(startedIso), tz);
   const d = new Date(`${start.date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + Math.round(day));
   const date = d.toISOString().slice(0, 10);
   const midnight = Date.parse(zonedMidnight(date, tz));
-  if (!sendingDay(midnight + 12 * 3600000, tz)) return mustSend ? nextCadenceWindow(s, tz, midnight + 34 * 3600000) : null;
-  const [a, b] = SLOTS[slot] || SLOTS.am;
+  if (!sendingDay(midnight + 12 * 3600000, tz, rules, lead.state)) return mustSend ? nextCadenceWindow(s, tz, midnight + 34 * 3600000, rules, lead.state) : null;
+  let [a, b] = SLOTS[slot] || SLOTS.am;
+  // A slot that starts before the day's opening hour (e.g. the am slot on a Sunday that opens at noon) is moved up to it.
+  const h = hoursFor(date, rules, lead.state);
+  if (h && a < h[0]) { a = h[0]; b = Math.max(b, a + 30); }
   return new Date(midnight + (a + spread(`${lead.id}:${day}:${slot}`, b - a)) * 60000).toISOString();
 }
 
 /** The next moment a cadence follow-up may go out, from `at` on. */
-export function nextCadenceWindow(s: any, tz: string, at: number) {
+export function nextCadenceWindow(s: any, tz: string, at: number, rules?: SendRules | null, state?: string) {
   let t = at;
-  for (let i = 0; i < 10 * 24 * 12; i++, t += 300000) if (cadenceOpen(s, tz, t)) return new Date(t).toISOString();
+  for (let i = 0; i < 10 * 24 * 12; i++, t += 300000) if (cadenceOpen(s, tz, t, rules, state)) return new Date(t).toISOString();
   return new Date(at + 86400000).toISOString();
 }
