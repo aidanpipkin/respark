@@ -1,0 +1,20 @@
+import { setup, request, log, complete } from '../_shared/provisioning.ts';
+import { adminSettings } from '../_shared/agentAccess.ts';
+import { failure } from '../_shared/ghl.ts';
+export default async function(req){
+ try{const {base44,input,settings:s,config}=await setup(req);if(input.action!=='create')throw new Error('Choose Create calendar.');if(!s.connected)throw new Error('Verify workspace access first.');
+ let calendar;if(s.calendar_id){const response=await request(s,`/calendars/${encodeURIComponent(s.calendar_id)}`);calendar=response.data.calendar || response.data;}
+ if(!calendar){const all=await request(s,`/calendars/?locationId=${encodeURIComponent(s.location_id)}`);calendar=(all.data.calendars||[]).find(c=>c.name==='Respark Strategy Call');}
+ if(!calendar){if(!s.owner_user_id){const users=await request(s,`/users/?locationId=${encodeURIComponent(s.location_id)}`);const owner=(users.data.users||[]).find(u=>u.email?.toLowerCase()===config.owner_email.toLowerCase());if(owner){s.owner_user_id=owner.id;await base44.asServiceRole.entities.AgentSettings.update(s.id,{owner_user_id:owner.id});}}
+ if(!s.owner_user_id)throw new Error('Provision owner access in step 2 before creating the calendar.');
+ const hours=s.calendar_hours?.length?s.calendar_hours:[...[1,2,3,4,5].map(day=>({day,open:'09:00',close:'18:00'})),{day:6,open:'10:00',close:'14:00'}];
+ const openHours=hours.map(h=>{const [openHour,openMinute]=h.open.split(':').map(Number);const [closeHour,closeMinute]=h.close.split(':').map(Number);return {daysOfTheWeek:[Number(h.day)],hours:[{openHour,openMinute,closeHour,closeMinute}]};});
+ const body={locationId:s.location_id,name:'Respark Strategy Call',calendarType:'round_robin',description:'A 20-minute phone conversation about life insurance options.',slug:'respark-strategy-call',widgetSlug:'respark-strategy-call',widgetType:'default',eventTitle:'Respark Strategy Call: {{contact.name}} and {{custom_values.agent_first_name}}',eventColor:'#FF6B2C',teamMembers:[{userId:s.owner_user_id,priority:0.5,isPrimary:true,locationConfigurations:[{kind:'outbound_call',location:'{{contact.phone}}',position:0}]}],slotDuration:20,slotDurationUnit:'mins',slotInterval:20,slotIntervalUnit:'mins',slotBuffer:15,slotBufferUnit:'mins',preBuffer:0,preBufferUnit:'mins',appoinmentPerSlot:1,appoinmentPerDay:s.max_calls_per_day||6,allowBookingAfter:2,allowBookingAfterUnit:'hours',allowBookingFor:14,allowBookingForUnit:'days',openHours,autoConfirm:true,allowReschedule:true,allowCancellation:true,stickyContact:true,googleInvitationEmails:false,shouldAssignContactToTeamMember:true,enableRecurring:false,isLivePaymentMode:false,formSubmitType:'ThankYouMessage',formSubmitThanksMessage:"You're booked. {{custom_values.agent_first_name}} will call you at the time you picked. Reply STOP to any text to opt out.",availabilityType:0,notifications:[{type:'email',shouldSendToContact:true,shouldSendToUser:true,shouldSendToSelectedUsers:false}]};
+ const result=await request(s,'/calendars/','POST',body);calendar=result.data.calendar || result.data;if(!calendar.id)throw new Error('Calendar response omitted its ID.');await base44.asServiceRole.entities.AgentSettings.update(s.id,{calendar_id:calendar.id});await log(base44,s,4,'calendar',body.name,calendar.id,'POST /calendars/',result.status);
+ }
+ if(!calendar.id)throw new Error('Unable to identify the calendar.');
+ const booking_url=s.domain?`https://${s.domain}/book`:`https://api.leadconnectorhq.com/widget/booking/${calendar.id}`;
+ if(s.custom_value_ids?.booking_url){const result=await request(s,`/locations/${encodeURIComponent(s.location_id)}/customValues/${encodeURIComponent(s.custom_value_ids.booking_url)}`,'PUT',{name:'booking_url',value:booking_url});await log(base44,s,4,'customValue','booking_url',s.custom_value_ids.booking_url,'PUT booking_url custom value',result.status);}
+ return Response.json({settings:adminSettings(await complete(base44,s,4,{calendar_id:calendar.id,booking_url})),manual:'Log into the sub-account as the owner user > My Profile > connect Outlook/Google calendar.'});
+ }catch(error){return failure(error);}
+}

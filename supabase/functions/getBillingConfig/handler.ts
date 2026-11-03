@@ -1,0 +1,5 @@
+import { secrets } from '../_shared/runtime.ts';
+import { setupContext,configFor } from '../_shared/setupAccess.ts';
+import { billingAccount,cardSummary } from '../_shared/stripeRest.ts';
+import { failure } from '../_shared/ghl.ts';
+export default async function(req){try{const {E,s}=await setupContext(req);const c=await configFor(E);const publishableKey=secrets.get('STRIPE_PUBLISHABLE_KEY')||'';if(!publishableKey.startsWith(c.stripe_mode==='live'?'pk_live_':'pk_test_'))throw new Error('Billing configuration does not match the selected mode.');return Response.json({publishable_key:publishableKey,stripe_mode:c.stripe_mode,phone_number_setup_fee_cents:c.phone_number_setup_fee_cents??0,card:cardSummary(await billingAccount(E,s.agent_email))},{headers:{'Cache-Control':'no-store'}});}catch(e){return failure(e);}}
