@@ -45,3 +45,7 @@ verify_jwt = false
 verify_jwt = false
 [functions.appointmentJourney]
 verify_jwt = false
+
+# One-time migration endpoint (x-import-token against Vault `import_token`); delete the Vault entry after cutover.
+[functions.importRows]
+verify_jwt = false
