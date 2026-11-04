@@ -27,13 +27,19 @@ function parseTimestamp(v: string): string {
   return new Date(iso).toISOString();
 }
 
+// Every edge-function isolate opens its own pool, and hundreds of isolates can be alive at once
+// (one per agent worker per minute). Direct Postgres connections are capped at a few hundred, so
+// production should point SUPABASE_DB_POOLER_URL at Supavisor in transaction mode (port 6543),
+// which multiplexes thousands of clients onto a few server connections. Each isolate keeps the
+// pool tiny (DB_POOL_MAX, default 2) and drops idle connections fast.
 export function connect(url?: string, extra: Record<string, unknown> = {}): Sql {
-  const dsn = url ?? Deno.env.get('SUPABASE_DB_URL') ?? Deno.env.get('DATABASE_URL');
-  if (!dsn) throw new Error('SUPABASE_DB_URL (or DATABASE_URL) is not set.');
+  const dsn = url ?? Deno.env.get('SUPABASE_DB_POOLER_URL') ?? Deno.env.get('SUPABASE_DB_URL') ?? Deno.env.get('DATABASE_URL');
+  if (!dsn) throw new Error('SUPABASE_DB_POOLER_URL / SUPABASE_DB_URL (or DATABASE_URL) is not set.');
   return postgres(dsn, {
-    max: 3,
-    idle_timeout: 20,
-    connect_timeout: 15,
+    max: Math.max(1, Number(Deno.env.get('DB_POOL_MAX')) || 2),
+    idle_timeout: 10,
+    connect_timeout: 5,
+    max_lifetime: 15 * 60,
     // Supavisor (the Supabase pooler) in transaction mode rejects named prepared statements.
     prepare: false,
     connection: { TimeZone: 'UTC' },
@@ -239,6 +245,9 @@ export function entityClient(sql: Sql, entity: string, scope: Scope = null) {
   if (!meta) throw new EntityError(`Unknown entity ${entity}`);
   const table = `public.${quoteIdent(meta.table)}`;
   const strict = Deno.env.get('ENTITIES_STRICT') === '1';
+  // Defense in depth: a non-admin client has no business with entities that carry no owner column
+  // (PlatformSettings, PlatformCredential, Referral, EngineCursor); handlers read those with the service role.
+  if (scope && !scope.admin && !meta.ownerField) throw new EntityError(`Entity ${entity} is not available to agents`, 403);
   const scoped = !!scope && !scope.admin && !!meta.ownerField;
   const hide = scope && !scope.admin ? meta.hidden : [];
 

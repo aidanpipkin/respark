@@ -194,7 +194,8 @@ export const ENTITIES: Record<string, EntityMeta> = {
       "token_kind": "text",
       "ms_refresh_token": "text",
       "ms_connected_email": "text",
-      "ms_connected_at": "text"
+      "ms_connected_at": "text",
+      "ghl_webhook_secret": "text"
     },
     "hidden": [
       "agent_ghl_user_id",
@@ -202,7 +203,8 @@ export const ENTITIES: Record<string, EntityMeta> = {
       "ghl_token_expires_at",
       "location_id",
       "token_kind",
-      "ms_refresh_token"
+      "ms_refresh_token",
+      "ghl_webhook_secret"
     ],
     "ownerField": "agent_email",
     "required": [

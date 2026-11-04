@@ -12,6 +12,25 @@ const PRODUCTS = [['iul', 'IUL'], ['final_expense', 'Final expense'], ['mortgage
 const SUGGESTED = ['Mutual of Omaha IUL', 'Transamerica IUL', 'North American IUL'];
 const BLANK = { name: '', url: '', products: ['iul'], approved: false };
 
+/** Link to a document: https links open directly; stored files (storage paths) get a signed URL when opened. */
+function DocLink({ url, children }) {
+  const [busy, setBusy] = useState(false);
+  const cls = 'font-medium hover:text-primary';
+  if (/^https:\/\//.test(url || '')) return <a href={url} target="_blank" rel="noreferrer" className={cls}>{children}</a>;
+  async function open(e) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    const w = window.open('', '_blank', 'noopener'); // open first so the popup blocker allows it after the await
+    try {
+      const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({ file_uri: url });
+      if (w) w.location.href = signed_url; else window.location.assign(signed_url);
+    } catch (err) { if (w) w.close(); console.error('[DocumentsPanel] could not sign document url', err); notify.err(err, 'Could not open the document'); }
+    finally { setBusy(false); }
+  }
+  return <a href="#" onClick={open} className={cls} aria-busy={busy || undefined}>{children}</a>;
+}
+
 /** Pre-call documents linked and attached in every booked-call email. */
 export default function DocumentsPanel() {
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ['admin-documents'], queryFn: () => call('adminDocuments', {}) });
@@ -27,11 +46,12 @@ export default function DocumentsPanel() {
     if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') { notify.err('That file isn\'t a PDF.', 'Not added'); return; }
     if (file.size > 15 * 1024 * 1024) { notify.err('Keep PDFs under 15 MB so emails deliver.', 'File too large'); return; }
     setBusy('upload');
-    let file_url = '';
-    try { ({ file_url } = await base44.integrations.Core.UploadFile({ file })); }
+    // Store the durable storage path (file_uri), never the 1-hour signed URL: links and email attachments are signed when used.
+    let file_uri = '';
+    try { ({ file_uri } = await base44.integrations.Core.UploadFile({ file })); }
     catch (e) { console.error('[DocumentsPanel] upload failed', e); notify.err(`${e?.message || 'Unknown error'}. Try again, or refresh the page and sign in again.`, 'Upload failed'); setBusy(''); return; }
-    if (!file_url) { notify.err('No file link came back. Try again.', 'Upload failed'); setBusy(''); return; }
-    const doc = { ...form, url: file_url, name: (form.name || '').trim() || file.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim(), approved: true };
+    if (!file_uri) { notify.err('No file path came back. Try again.', 'Upload failed'); setBusy(''); return; }
+    const doc = { ...form, url: file_uri, name: (form.name || '').trim() || file.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim(), approved: true };
     setForm(doc); setBusy('');
     if (await run({ action: 'save', document: doc }, 'save', 'Document added', `${doc.name} now goes out with every booked-call email for ${productNames(doc.products)}.`, doc.name)) setForm(BLANK);
   }
@@ -56,7 +76,7 @@ export default function DocumentsPanel() {
       <p className="subtext mt-1 text-sm">Linked and attached in the email every lead gets when they book. Matched to the campaign's product.</p></div>
     {!!missing.length && <p className="flex gap-2 rounded-lg bg-primary/5 p-3 text-xs"><AlertTriangle size={14} className="mt-0.5 shrink-0 text-primary" />Still to upload: {missing.join(', ')}.</p>}
     <ul className="divide-y text-sm">{data.documents.map(d => <li key={d.id} className={`flex flex-wrap items-center justify-between gap-2 py-2 ${flash === d.name ? 'lr-done' : ''}`}>
-      <div><a href={d.url} target="_blank" rel="noreferrer" className="font-medium hover:text-primary">{d.name}</a><p className="text-xs text-muted-foreground">{(d.products || []).map(p => PRODUCTS.find(x => x[0] === p)?.[1] || p).join(', ')}{d.active === false ? ' · off' : ''}</p></div>
+      <div><DocLink url={d.url}>{d.name}</DocLink><p className="text-xs text-muted-foreground">{(d.products || []).map(p => PRODUCTS.find(x => x[0] === p)?.[1] || p).join(', ')}{d.active === false ? ' · off' : ''}</p></div>
       <div className="flex gap-2">{d.active === false
         ? <Button size="sm" variant="outline" loading={busy === `on:${d.id}`} disabled={!!busy} onClick={() => run({ action: 'save', document: { ...d, active: true } }, `on:${d.id}`, 'Document turned on', `${d.name} goes out with booked-call emails again.`, d.name)}>Turn on</Button>
         : <ConfirmButton size="sm" variant="ghost" loading={busy === `off:${d.id}`} disabled={!!busy} title={d.builtin ? `Turn off ${d.name}?` : `Remove ${d.name}?`} description={d.builtin ? 'It stops going out with booked-call emails. You can turn it back on any time.' : 'The file is removed from booked-call emails. You would need to upload it again to bring it back.'} confirmLabel={d.builtin ? 'Turn off' : 'Remove'} destructive={!d.builtin} onConfirm={() => run({ action: 'remove', id: d.id }, `off:${d.id}`, d.builtin ? 'Document turned off' : 'Document removed', `${d.name} no longer goes out with booked-call emails.`, d.builtin ? d.name : '')}>{d.builtin ? 'Turn off' : 'Remove'}</ConfirmButton>}</div>

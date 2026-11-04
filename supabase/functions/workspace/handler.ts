@@ -1,5 +1,16 @@
 import { context, agentSettings, safeSettings, scope, failure } from '../_shared/ghl.ts';
 import { systemPrompt, knowledgeDoc, writerPrompt, sequence, PROMPT_VERSION, AI_MODEL } from '../_shared/truckerSeed.ts';
+// Two parallel first requests (the app fires several on load) both see "no settings"; the unique index on
+// agent_settings(lower(agent_email)) rejects the second insert (23505), which then re-reads the winner's row.
+async function createOrReread(base44, row) {
+  try { return await base44.asServiceRole.entities.AgentSettings.create(row); }
+  catch (e) {
+    if (e?.code !== '23505') throw e;
+    const again = await base44.asServiceRole.entities.AgentSettings.filter({ agent_email: row.agent_email }, { limit: 1 });
+    if (!again.items[0]) throw e;
+    return again.items[0];
+  }
+}
 export default async function(req) {
   try {
     const { base44, user } = await context(req);
@@ -10,13 +21,13 @@ export default async function(req) {
         const config = (await base44.asServiceRole.entities.PlatformSettings.filter({ singleton_key: 'platform' }, { limit: 1 })).items[0];
         if (config?.self_serve_enabled !== false) {
           const first = String(user.full_name || '').split(' ')[0] || '';
-          settings = await base44.asServiceRole.entities.AgentSettings.create({ agent_email: user.email, first_name: first, display_name: user.full_name || first, notification_email: user.email, business_email: user.email, status: 'onboarding', mode: 'review', self_serve: true, onboarding_step: 1 });
+          settings = await createOrReread(base44, { agent_email: user.email, first_name: first, display_name: user.full_name || first, notification_email: user.email, business_email: user.email, status: 'onboarding', mode: 'review', self_serve: true, onboarding_step: 1 });
         }
       }
       const needs_welcome = !!settings && settings.self_serve === true && settings.provisioning?.state !== 'done';
       return Response.json({ settings: safeSettings(settings), user: { email: user.email, full_name: user.full_name, role: 'agent' }, awaiting_setup: !settings, needs_welcome });
     }
-    if (!settings) settings = await base44.asServiceRole.entities.AgentSettings.create({ agent_email: user.email, first_name: user.full_name?.split(' ')[0] || '', display_name: user.full_name?.split(' ')[0] || '', notification_email: user.email, status: 'onboarding' });
+    if (!settings) settings = await createOrReread(base44, { agent_email: user.email, first_name: user.full_name?.split(' ')[0] || '', display_name: user.full_name?.split(' ')[0] || '', notification_email: user.email, status: 'onboarding' });
     let { items } = await base44.entities.Campaign.filter({ agent_email: user.email, name: { $in: ['Trucker IUL', 'Trucker IUL Respark'] } }, { limit: 1 });
     let campaign = items[0];
     if (!campaign) campaign = await base44.asServiceRole.entities.Campaign.create({ ...scope(settings), name: 'Trucker IUL Respark', product: 'Indexed universal life', status: 'draft', mode: 'review', persona: 'assistant', ab_enabled: true, ab_lead_cap: 200, prompt_version: PROMPT_VERSION, system_prompt: systemPrompt, knowledge_doc: knowledgeDoc, writer_prompt: writerPrompt, personalize_sequence: true, ai_model: AI_MODEL, ghl_tag: 'campaign-trucker-iul', stage_ids: {} });

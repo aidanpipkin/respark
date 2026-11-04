@@ -19,7 +19,7 @@ import { textAgent, emailAgent, agentAwake } from './agentNotify.ts';
 import { platformConfig } from './credits.ts';
 import { logMessage } from './messageJobs.ts';
 import { DEFAULT_MODEL } from './sequenceWriter.ts';
-import { functionUrl } from './runtime.ts';
+import { functionUrl, createFileSignedUrl } from './runtime.ts';
 import { msConnected, graphCreateEvent, graphDeleteEvent } from './msGraph.ts';
 
 // Public web app origin for links in texts and emails: APP_URL on Supabase, the Base44 domain as the legacy fallback.
@@ -31,16 +31,34 @@ const MIN = 60000, H = 3600000, DAY = 86400000;
 const pretty = (p: string) => { const d = String(p || '').replace(/\D/g, '').slice(-10); return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : p || ''; };
 const first = (s: any) => String(s.first_name || s.display_name || 'your agent').split(/\s+/)[0];
 const esc = (t: any) => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as any)[c]);
-const tzShort = (iso: string, tz: string) => new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' }).formatToParts(new Date(iso)).find(p => p.type === 'timeZoneName')?.value || '';
-const timeOnly = (iso: string, tz: string) => `${new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(new Date(iso))} ${tzShort(iso, tz)}`;
-const dayLabel = (iso: string, tz: string) => new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(iso));
+// Formatters are cached per time zone: constructing Intl.DateTimeFormat is the expensive part.
+const FMT = new Map<string, Intl.DateTimeFormat>();
+const fmt = (tz: string, opts: Intl.DateTimeFormatOptions) => { const k = `${tz}|${JSON.stringify(opts)}`; let f = FMT.get(k); if (!f) { f = new Intl.DateTimeFormat('en-US', { timeZone: tz, ...opts }); FMT.set(k, f); } return f; };
+const tzShort = (iso: string, tz: string) => fmt(tz, { timeZoneName: 'short' }).formatToParts(new Date(iso)).find(p => p.type === 'timeZoneName')?.value || '';
+const timeOnly = (iso: string, tz: string) => `${fmt(tz, { hour: 'numeric', minute: '2-digit' }).format(new Date(iso))} ${tzShort(iso, tz)}`;
+const dayLabel = (iso: string, tz: string) => fmt(tz, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(iso));
 
 // ---------- Documents ----------
 export function documentsFor(config: any, campaign: any) {
   const product = productKind(campaign);
-  const docs = (Array.isArray(config.booking_documents) ? config.booking_documents : []).filter((d: any) => d && d.active !== false && /^https:\/\//.test(d.url || '') && (!d.products?.length || d.products.includes('all') || d.products.includes(product)));
+  const docs = (Array.isArray(config.booking_documents) ? config.booking_documents : []).filter((d: any) => d && d.active !== false && /^(https:\/\/|files\/)\S+$/.test(d.url || '') && (!d.products?.length || d.products.includes('all') || d.products.includes(product)));
   if (!docs.some((d: any) => d.id === BUYERS_GUIDE.id) && !(config.booking_documents || []).some((d: any) => d?.id === BUYERS_GUIDE.id && d.active === false)) docs.unshift(BUYERS_GUIDE);
   return docs.slice(0, 8);
+}
+
+/**
+ * Booking documents stored in Storage (`files/...`) are shared through a signed URL (7 days by default,
+ * long enough for the call); https links pass through. A document that cannot be signed is dropped
+ * from this email rather than sent as a dead link.
+ */
+export async function signDocuments(docs: any[], expiresIn = 7 * 24 * 3600) {
+  const out: any[] = [];
+  for (const d of docs) {
+    if (/^https:\/\//.test(d.url || '')) { out.push(d); continue; }
+    try { const { signed_url } = await createFileSignedUrl({ file_uri: d.url, expires_in: expiresIn }); out.push({ ...d, url: signed_url }); }
+    catch (e) { console.error('[appointmentJourney] could not sign document', d.name || d.id || d.url, (e as Error).message); }
+  }
+  return out;
 }
 
 // ---------- Calendar ----------
@@ -113,7 +131,7 @@ export function leadEmail(appt: any, s: any, lead: any, docs: any[], p: any, ori
   const when = `${dayLabel(appt.start_time, tz)} at ${timeOnly(appt.start_time, tz)}`;
   const agentName = s.display_name || [s.first_name, s.last_name].filter(Boolean).join(' ') || first(s);
   const color = s.primary_color || '#0F1E3D';
-  const subject = `Your call with ${first(s)}: ${new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(appt.start_time))} at ${timeOnly(appt.start_time, tz)}`;
+  const subject = `Your call with ${first(s)}: ${fmt(tz, { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(appt.start_time))} at ${timeOnly(appt.start_time, tz)}`;
   const li = (t: string) => `<li style="margin:0 0 8px">${t}</li>`;
   const html = `<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937;line-height:1.55">
 <div style="background:${esc(color)};color:#fff;padding:20px 24px;border-radius:12px 12px 0 0"><div style="font-size:13px;opacity:.85">${esc(s.brand_name || '')}</div><div style="font-size:20px;font-weight:600;margin-top:4px">Your call is booked</div></div>
@@ -230,7 +248,7 @@ export async function onBooked(base44: any, appointmentId: string, origin: strin
   await E.Appointment.update(appt.id, { invite_token: appt.invite_token, confirmation: Date.parse(appt.start_time) - Date.now() < 3 * H ? 'confirmed' : 'pending', ...(Date.parse(appt.start_time) - Date.now() < 3 * H ? { confirmed_at: new Date().toISOString() } : {}) });
   const campaign = lead.campaign_id ? await E.Campaign.get(lead.campaign_id).catch(() => null) : null;
   const config = await platformConfig(E);
-  const docs = documentsFor(config, campaign);
+  const docs = await signDocuments(documentsFor(config, campaign));
   const p = await personalize(base44, s, lead, campaign);
   let profile: any = {}; try { profile = await leadProfile(base44, s, lead); } catch { /* ok */ }
   const tz = s.home_timezone || 'America/Chicago';
@@ -301,11 +319,12 @@ export const CONFIRM_TEXT = (lead: any, s: any, appt: any, morning: boolean) => 
 };
 
 async function textsLast24h(E: any, lead: any) {
-  return E.MessageLog.count({ lead_id: lead.id, event_type: 'sms_sent', occurred_at: { $gte: new Date(Date.now() - DAY).toISOString() } }).catch(() => 0);
+  // agent_email leads the (agent_email, event_type, occurred_at) and (lead_id, event_type, occurred_at) indexes; never a table scan.
+  return E.MessageLog.count({ agent_email: lead.agent_email, lead_id: lead.id, event_type: 'sms_sent', occurred_at: { $gte: new Date(Date.now() - DAY).toISOString() } }).catch(() => 0);
 }
 
 /** Runs every 15 minutes: sends whatever is due for upcoming calls, plus each agent's morning agenda. */
-export async function runJourney(base44: any, origin: string, deadline = Date.now() + 150000) {
+export async function runJourney(base44: any, origin: string, deadline = Date.now() + 90000) {
   const E = base44.asServiceRole.entities;
   const out = { sent: 0, skipped: 0, failed: 0, agendas: 0, scanned: 0 };
   const now = Date.now();
@@ -318,7 +337,7 @@ export async function runJourney(base44: any, origin: string, deadline = Date.no
     const page = await E.Appointment.filter({ status: 'booked', start_time: { $gt: new Date(now - 5 * MIN).toISOString(), $lte: new Date(now + 40 * H).toISOString() } }, { sort: 'start_time', limit: 200, cursor });
     all.push(...page.items);
     cursor = page.has_more ? page.next_cursor : undefined;
-  } while (cursor && Date.now() < deadline - 60000);
+  } while (cursor && Date.now() < deadline - 15000);
   out.scanned = all.length;
   for (const appt of all) {
     if (Date.now() > deadline) break;

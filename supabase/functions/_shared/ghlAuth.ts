@@ -7,7 +7,8 @@
 //
 // Older workspaces that were connected with a pasted private-integration token
 // (token_kind 'pit') keep working unchanged.
-import { secrets, functionUrl } from './runtime.ts';
+import { secrets, functionUrl, timingSafeEqual } from './runtime.ts';
+import { getSql } from './entities.ts';
 
 const API = 'https://services.leadconnectorhq.com';
 const KEY = 'ghl_agency';
@@ -44,9 +45,11 @@ export function redirectUri(origin: string) { try { return functionUrl('ghlOAuth
 export async function exchangeCode(base44: any, code: string, redirect: string) {
   const { config, clientId, clientSecret } = await clientConfig(base44);
   if (!clientId || !clientSecret) throw new Error('Add the marketplace app client ID and the GHL_CLIENT_SECRET secret first.');
+  // Without a known agency any GHL account that installs the app would become "the agency".
+  if (!String(config.agency_company_id || '').trim()) throw new Error('Set the Agency company ID on Admin > Platform before connecting GHL.');
   const data = await post('/oauth/token', form({ client_id: clientId, client_secret: clientSecret, grant_type: 'authorization_code', code, user_type: 'Company', redirect_uri: redirect }));
   if (data.userType !== 'Company' || !data.companyId) throw new Error('Install the app at the agency level (not a single sub-account).');
-  if (config.agency_company_id && data.companyId !== config.agency_company_id) throw new Error('This installation belongs to a different agency.');
+  if (data.companyId !== config.agency_company_id) throw new Error('This installation belongs to a different agency.');
   const now = Date.now();
   const record = { key: KEY, company_id: data.companyId, access_token: data.access_token, refresh_token: data.refresh_token, expires_at: new Date(now + (Number(data.expires_in) || 86000) * 1000).toISOString(), scope: String(data.scope || '').slice(0, 4000), installed_by_user_id: data.userId || '', is_bulk_installation: !!data.isBulkInstallation, connected_at: new Date(now).toISOString(), last_refresh_at: new Date(now).toISOString(), last_error: '' };
   const existing = await credentialRecord(base44);
@@ -57,20 +60,45 @@ export async function exchangeCode(base44: any, code: string, redirect: string) 
 
 // Agency OAuth access token, refreshed when close to expiry. Null when the
 // marketplace app has not been installed yet.
+//
+// GHL rotates the refresh token on every refresh, so two isolates refreshing at once would leave one
+// of them holding a dead token and overwrite the good one. The refresh runs under a transaction-scoped
+// advisory lock: whoever gets the lock re-reads the row and skips the refresh if it already happened.
+const fresh = (cred: any) => !!cred?.access_token && Date.parse(cred.expires_at || '') - Date.now() > EARLY_MS;
+
 export async function agencyOAuthToken(base44: any): Promise<string | null> {
-  let cred = await credentialRecord(base44);
+  const cred = await credentialRecord(base44);
   if (!cred?.refresh_token) return null;
-  if (Date.parse(cred.expires_at || '') - Date.now() > EARLY_MS) return cred.access_token;
+  if (fresh(cred)) return cred.access_token;
   const { clientId, clientSecret } = await clientConfig(base44);
-  try {
-    const data = await post('/oauth/token', form({ client_id: clientId, client_secret: clientSecret, grant_type: 'refresh_token', refresh_token: cred.refresh_token, user_type: 'Company' }));
-    const update = { access_token: data.access_token, refresh_token: data.refresh_token || cred.refresh_token, expires_at: new Date(Date.now() + (Number(data.expires_in) || 86000) * 1000).toISOString(), last_refresh_at: new Date().toISOString(), last_error: '' };
-    cred = await base44.asServiceRole.entities.PlatformCredential.update(cred.id, update);
-    return cred.access_token;
-  } catch (e) {
-    await base44.asServiceRole.entities.PlatformCredential.update(cred.id, { last_error: String((e as Error).message).slice(0, 500) });
+  const sql = getSql();
+  type Outcome = { token: string | null } | { failed: { id: string; message: string } };
+  const outcome = await sql.begin(async (tx) => {
+    await tx`select pg_advisory_xact_lock(hashtext('ghl_agency_refresh'))`;
+    const rows = await tx`select id, access_token, refresh_token, expires_at from public.platform_credential where key = ${KEY} limit 1`;
+    const current = rows[0] as { id: string; access_token?: string; refresh_token?: string; expires_at?: string } | undefined;
+    if (!current?.refresh_token) return { token: null };
+    // Another isolate refreshed while we waited for the lock.
+    if (fresh(current)) return { token: current.access_token as string };
+    try {
+      const data = await post('/oauth/token', form({ client_id: clientId, client_secret: clientSecret, grant_type: 'refresh_token', refresh_token: current.refresh_token, user_type: 'Company' }));
+      if (!data.access_token) throw new Error('GHL returned no access token.');
+      const expiresAt = new Date(Date.now() + (Number(data.expires_in) || 86000) * 1000).toISOString();
+      const refreshToken = String(data.refresh_token || current.refresh_token);
+      const now = new Date().toISOString();
+      await tx`update public.platform_credential set access_token = ${String(data.access_token)}, refresh_token = ${refreshToken}, expires_at = ${expiresAt}, last_refresh_at = ${now}, last_error = '' where id = ${current.id}`;
+      return { token: String(data.access_token) };
+    } catch (e) {
+      // Returned (not thrown) so the lock transaction commits; last_error is written outside it below.
+      return { failed: { id: current.id, message: String((e as Error).message || e).slice(0, 500) } };
+    }
+  }) as unknown as Outcome;
+  if ('failed' in outcome) {
+    console.error('[ghlAuth] agency token refresh failed:', outcome.failed.message);
+    await base44.asServiceRole.entities.PlatformCredential.update(outcome.failed.id, { last_error: outcome.failed.message }).catch(() => {});
     throw new Error('The GHL agency connection needs to be reconnected by an administrator.');
   }
+  return outcome.token;
 }
 
 // Agency-level credential for creating sub-accounts and users: the OAuth token
@@ -97,12 +125,64 @@ export async function mintLocationToken(base44: any, companyId: string, location
 }
 
 // Make sure an agent's settings carry a usable sub-account token.
+// A failed mint returns the stale settings (logged once per agent per minute) so screens that do not
+// talk to GHL (billing, numbers, inbox) keep working; ghl() calls still fail on the stale token.
+const mintFailureLogged = new Map<string, number>();
 export async function freshSettings(base44: any, s: any) {
   if (!s || s.token_kind !== 'oauth' || !s.location_id) return s;
   if (s.ghl_token && Date.parse(s.ghl_token_expires_at || '') - Date.now() > EARLY_MS) return s;
-  const cred = await credentialRecord(base44);
-  const minted = await mintLocationToken(base44, cred?.company_id || '', s.location_id);
-  return base44.asServiceRole.entities.AgentSettings.update(s.id, { ghl_token: minted.token, ghl_token_expires_at: minted.expires_at, connected: true });
+  try {
+    const cred = await credentialRecord(base44);
+    const minted = await mintLocationToken(base44, cred?.company_id || '', s.location_id);
+    return await base44.asServiceRole.entities.AgentSettings.update(s.id, { ghl_token: minted.token, ghl_token_expires_at: minted.expires_at, connected: true });
+  } catch (e) {
+    const key = String(s.agent_email || s.id);
+    const last = mintFailureLogged.get(key) || 0;
+    if (Date.now() - last > 60000) {
+      mintFailureLogged.set(key, Date.now());
+      if (mintFailureLogged.size > 2000) mintFailureLogged.clear();
+      console.error(`[ghlAuth] could not mint a location token for ${key}: ${String((e as Error).message || e).slice(0, 300)}`);
+    }
+    return s;
+  }
+}
+
+// ---------- OAuth state for the agency install: HMAC-signed with GHL_CLIENT_SECRET ----------
+// The callback only accepts a code that was started from our admin page (CSRF / login-fixation guard).
+const enc = new TextEncoder();
+const b64url = (bytes: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+async function hmac(data: string, secret: string) {
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return b64url(await crypto.subtle.sign('HMAC', key, enc.encode(data)));
+}
+const stateSecret = () => secrets.get('GHL_CLIENT_SECRET') || '';
+
+/** Signed, expiring `state` for the marketplace install URL. `by` is the admin starting the install. */
+export async function signInstallState(by: string, ttlMs = 15 * 60000, secret = stateSecret()): Promise<string> {
+  if (!secret) throw new Error('Add the GHL_CLIENT_SECRET secret first.');
+  const payload = b64url(enc.encode(JSON.stringify({ u: String(by || '').toLowerCase(), n: crypto.randomUUID().slice(0, 8), x: Date.now() + ttlMs })));
+  return `${payload}.${await hmac(payload, secret)}`;
+}
+
+/** The admin email the state was minted for, or null when missing, forged or expired. */
+export async function verifyInstallState(state: string, secret = stateSecret()): Promise<string | null> {
+  if (!secret) return null;
+  const [payload, sig, extra] = String(state || '').split('.');
+  if (!payload || !sig || extra !== undefined) return null;
+  if (!timingSafeEqual(sig, await hmac(payload, secret))) return null;
+  try {
+    const { u, x } = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof u === 'string' && Number(x) > Date.now() ? u : null;
+  } catch { return null; }
+}
+
+/** The marketplace install URL with our signed state attached. */
+export async function installUrl(config: any, by: string): Promise<string> {
+  const base = String(config?.ghl_install_url || '').trim();
+  if (!base) throw new Error('Paste the installation URL from your GHL marketplace app first.');
+  const url = new URL(base);
+  url.searchParams.set('state', await signInstallState(by));
+  return url.toString();
 }
 
 export async function connectionStatus(base44: any) {

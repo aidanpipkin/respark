@@ -1,4 +1,4 @@
-import { createClientFromRequest } from '../_shared/runtime.ts';
+import { createClientFromRequest, clientIp } from '../_shared/runtime.ts';
 import { resilient } from '../_shared/entityRetry.ts';
 import { resolvePublicAgent,consentText,products,states } from '../_shared/publicSite.ts';
 import { syncWebsiteInquiry,notifyWebsiteInquiry } from '../_shared/websiteInquiry.ts';
@@ -18,7 +18,7 @@ export default async function(req){
   if(!/^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i.test(String(input.request_key||'')))throw new Error('Please reload the form and try again.');
   const pageUrl=new URL(String(input.page_url||''));if(!['http:','https:'].includes(pageUrl.protocol)||(pageUrl.pathname!=='/get-info'&&!hosted)||pageUrl.href.length>2000)throw new Error('Invalid form page.');const siteHost=String(input.host||'').toLowerCase();if(pageUrl.hostname.toLowerCase()!==siteHost)throw new Error('Invalid form origin.');
   const prior=await E.WebsiteSubmission.filter({request_key:input.request_key,agent_email:s.agent_email},{limit:1});if(prior.items[0]?.lead_id)return Response.json({accepted:true});
-  const ip=(req.headers.get('cf-connecting-ip')||req.headers.get('x-forwarded-for')?.split(',')[0]||'unknown').trim().slice(0,64);const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`${s.agent_email}|${ip}`));const ipHash=Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');const now=new Date().toISOString();
+  const ip=clientIp(req);const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`${s.agent_email}|${ip}`));const ipHash=Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');const now=new Date().toISOString();
   // Ceiling per agent across all IPs, so rotating addresses cannot flood an agent's GHL with fake leads.
   const agentHour=await E.WebsiteSubmission.count({agent_email:s.agent_email,submitted_at:{$gte:new Date(Date.now()-3600000).toISOString()}});if(!prior.items[0]&&agentHour>=40)return Response.json({error:'We are receiving a lot of requests right now. Please try again in a little while.'},{status:429});
   const [attempts,phoneAttempts]=await Promise.all([E.WebsiteSubmission.count({agent_email:s.agent_email,ip_hash:ipHash,submitted_at:{$gte:new Date(Date.now()-3600000).toISOString()}}),E.WebsiteSubmission.count({agent_email:s.agent_email,phone,submitted_at:{$gte:new Date(Date.now()-1800000).toISOString()}})]);if(!prior.items[0]&&(attempts>=5||phoneAttempts>=2))return Response.json({error:'Please wait before sending another request.'},{status:429});

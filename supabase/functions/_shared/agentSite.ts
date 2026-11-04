@@ -1,6 +1,7 @@
 // Each agent gets a hosted, carrier-compliant mini-site at /a/{slug}:
 // home, request-info form with optional consent checkbox, privacy policy and SMS terms.
 import { businessName, consentText } from './publicSite.ts';
+import { appOrigin as configuredOrigin } from './runtime.ts';
 
 function slugify(v: string) {
   return String(v || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'agent';
@@ -13,7 +14,9 @@ export async function ensurePublicSlug(E: any, s: any) {
   for (let i = 0; i < 20; i++) {
     const candidate = i ? `${base}-${i + 1}` : base;
     const taken = await E.AgentSettings.filter({ public_slug: candidate }, { limit: 1 });
-    if (!taken.items[0] || taken.items[0].id === s.id) { await E.AgentSettings.update(s.id, { public_slug: candidate }); return candidate; }
+    if (taken.items[0] && taken.items[0].id !== s.id) continue;
+    try { await E.AgentSettings.update(s.id, { public_slug: candidate }); return candidate; }
+    catch (e) { if ((e as { code?: string })?.code !== '23505') throw e; /* another agent took it between the read and the write; next suffix */ }
   }
   const fallback = `${base}-${crypto.randomUUID().slice(0, 6)}`;
   await E.AgentSettings.update(s.id, { public_slug: fallback });
@@ -23,7 +26,7 @@ export async function ensurePublicSlug(E: any, s: any) {
 export function appOrigin(req: Request) {
   const header = req.headers.get('x-base44-app-url');
   if (header && /^https:\/\//.test(header)) return new URL(header).origin;
-  return (Deno.env.get('APP_URL') || 'https://respark-pipkingroup.com').replace(/\/$/, '');
+  return configuredOrigin();
 }
 
 export function siteLinks(origin: string, slug: string) {

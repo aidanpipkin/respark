@@ -33,6 +33,20 @@ function fromSupabaseError(error, fallbackStatus = 400) {
   return httpError(error.message, status, { error: error.message, code: error.code, details: error.details, hint: error.hint });
 }
 
+/** Supabase Auth errors with user-facing wording for the common cases (rate limits, duplicate email). */
+function friendlyAuthError(error, fallbackStatus = 400) {
+  const e = fromSupabaseError(error, fallbackStatus);
+  const msg = String(error?.message || '');
+  if (/rate limit/i.test(msg) || error?.status === 429 || error?.code === 'over_email_send_rate_limit') {
+    e.message = 'Too many emails were sent to this address in a short time. Wait a few minutes, then try again.';
+    e.status = 429;
+  } else if (/already registered|already exists|user_already_exists/i.test(msg) || error?.code === 'user_already_exists') {
+    e.message = 'An account with this email already exists. Sign in instead.';
+    e.status = 409;
+  }
+  return e;
+}
+
 // ---- Session helpers ------------------------------------------------------------
 
 /** The current user's access token, or null when signed out. Replaces localStorage.base44_access_token reads. */
@@ -95,7 +109,11 @@ const auth = {
       email, password,
       options: { emailRedirectTo: redirectUrl('/welcome'), data: full_name ? { full_name } : undefined },
     });
-    if (error) throw fromSupabaseError(error);
+    if (error) throw friendlyAuthError(error);
+    // With email confirmations on, Supabase does not reveal that an email is taken; it returns a user with no identities.
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      throw httpError('An account with this email already exists. Sign in instead.', 409, { error: 'email_exists' });
+    }
     return { user: data.user, session: data.session, access_token: data.session?.access_token };
   },
 
@@ -108,13 +126,13 @@ const auth = {
 
   async resendOtp(email, type = 'signup') {
     const { error } = await supabase.auth.resend({ type, email, options: { emailRedirectTo: redirectUrl('/welcome') } });
-    if (error) throw fromSupabaseError(error);
+    if (error) throw friendlyAuthError(error);
     return { sent: true };
   },
 
   async resetPasswordRequest(email) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl('/reset-password') });
-    if (error) throw fromSupabaseError(error);
+    if (error) throw friendlyAuthError(error);
     return { sent: true };
   },
 
@@ -140,9 +158,24 @@ const auth = {
   async hasRecoverySession() {
     if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('token') || params.get('token_hash') || params.get('code')) return true;
+    if (params.get('token_hash') || params.get('code')) return true;
     if (/access_token=|type=recovery/.test(window.location.hash)) return true;
     return auth.isAuthenticated();
+  },
+
+  /**
+   * Supabase reports a failed magic/recovery link in the URL fragment
+   * (`#error=access_denied&error_code=otp_expired&error_description=...`). Returns the
+   * readable message, or '' when the URL carries no error.
+   */
+  authErrorFromUrl() {
+    if (typeof window === 'undefined') return '';
+    const read = str => { const p = new URLSearchParams(str.replace(/^[#?]/, '')); return p.get('error_description') || p.get('error_code') || p.get('error') || ''; };
+    const msg = read(window.location.hash) || read(window.location.search);
+    if (!msg) return '';
+    const code = (new URLSearchParams(window.location.hash.replace(/^#/, '')).get('error_code') || '').toLowerCase();
+    if (code === 'otp_expired' || /expired/i.test(msg)) return 'This link has expired. Request a new one and use it within an hour.';
+    return msg.replace(/\+/g, ' ');
   },
 
   async loginWithProvider(provider, returnTo) {

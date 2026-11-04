@@ -1,4 +1,5 @@
-import { secrets, functionUrl } from '../_shared/runtime.ts';
+import { functionUrl } from '../_shared/runtime.ts';
+import { newWebhookSecret, validWebhookSecret } from '../_shared/webhookAuth.ts';
 import { setup } from '../_shared/provisioning.ts';
 import { adminSettings } from '../_shared/agentAccess.ts';
 import { scope,failure } from '../_shared/ghl.ts';
@@ -7,7 +8,12 @@ import { runSequenceLead } from '../_shared/messageSequence.ts';
 const checks=['test_numbers_consent','test_openers','test_replies','test_control','test_booking','test_alerts','test_isolation'];
 export default async function(req){try{const {base44,user,input,settings:s}=await setup(req),E=base44.asServiceRole.entities;
  if(input.action==='status')return Response.json({ready:s.connected&&s.a2p_status==='approved'&&!!s.phone_number,status:s.status,mode:s.mode,webhook_received:!!s.onboarding_checks?.webhook_received});
- if(input.action==='webhook'){const url=new URL(functionUrl('ghlWebhook'));url.searchParams.set('secret',secrets.get('RESPARK_WEBHOOK_SECRET'));return Response.json({url:url.toString()});}
+ if(input.action==='webhook'||input.action==='rotate_webhook'){
+  // Each workspace gets its own webhook secret (agent_settings.ghl_webhook_secret); the ghlWebhook handler binds
+  // deliveries carrying it to this agent's location. 'webhook' mints one if missing, 'rotate_webhook' replaces it.
+  let secret=validWebhookSecret(s.ghl_webhook_secret)?s.ghl_webhook_secret:'';
+  if(!secret||input.action==='rotate_webhook'){secret=newWebhookSecret();await E.AgentSettings.update(s.id,{ghl_webhook_secret:secret});if(input.action==='rotate_webhook')await E.ControlAudit.create({...scope(s),actor_email:user.email,action:'webhook_secret_rotated',occurred_at:new Date().toISOString()});}
+  const url=new URL(functionUrl('ghlWebhook'));url.searchParams.set('secret',secret);return Response.json({url:url.toString(),rotated:input.action==='rotate_webhook'});}
  if(input.action==='pause'){const saved=await E.AgentSettings.update(s.id,{status:'paused'});await E.ControlAudit.create({...scope(s),actor_email:user.email,action:'account_messaging_paused',occurred_at:new Date().toISOString()});return Response.json({settings:adminSettings(saved)});}
  if(input.action==='agent_mode'){if(!['review','autopilot'].includes(input.mode)||(input.mode==='autopilot'&&input.confirmed!==true))throw new Error('Confirm the account’s messaging mode.');const saved=await E.AgentSettings.update(s.id,{mode:input.mode});await E.ControlAudit.create({...scope(s),actor_email:user.email,action:'account_mode_changed',details:{mode:input.mode},occurred_at:new Date().toISOString()});return Response.json({settings:adminSettings(saved)});}
  if(input.action==='campaign_status'){const c=await E.Campaign.get(input.campaign_id);if(c.agent_email!==s.agent_email||c.location_id!==s.location_id||!['active','paused'].includes(input.status))throw new Error('Campaign access denied.');await E.Campaign.update(c.id,{status:input.status});await E.ControlAudit.create({...scope(s),actor_email:user.email,action:'campaign_status_changed',details:{campaign_id:c.id,status:input.status},occurred_at:new Date().toISOString()});return Response.json({saved:true});}

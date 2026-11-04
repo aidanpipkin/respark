@@ -12,9 +12,14 @@ export default function ResetPassword() {
   // Supabase recovery links carry either a `token_hash` (custom email template) or
   // a session in the URL fragment that the client picks up itself; `resetToken`
   // is only set in the first case, `hasToken` covers both.
-  const resetToken = searchParams.get("token_hash") || searchParams.get("token");
+  // Note: a `?token=` param is the raw 6-digit OTP, not a token_hash, so it is deliberately ignored here.
+  const resetToken = searchParams.get("token_hash");
   const [hasToken, setHasToken] = useState(null);
-  useEffect(() => { base44.auth.hasRecoverySession().then(setHasToken).catch(() => setHasToken(false)); }, []);
+  const [linkError] = useState(() => base44.auth.authErrorFromUrl());
+  useEffect(() => {
+    if (linkError) { setHasToken(false); return; }
+    base44.auth.hasRecoverySession().then(setHasToken).catch(() => setHasToken(false));
+  }, [linkError]);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -44,8 +49,8 @@ export default function ResetPassword() {
     return (
       <AuthLayout
         icon={AlertTriangle}
-        title="Invalid reset link"
-        subtitle="This password reset link is missing or invalid"
+        title={linkError ? "This reset link didn't work" : "Invalid reset link"}
+        subtitle={linkError ? "" : "This password reset link is missing or invalid"}
         footer={
           <Link to="/forgot-password" className="text-primary font-medium hover:underline">
             Request a new link
@@ -53,7 +58,7 @@ export default function ResetPassword() {
         }
       >
         <p className="text-sm text-foreground text-center">
-          The link you used appears to be incomplete. Please request a new password reset email.
+          {linkError || "The link you used appears to be incomplete. Please request a new password reset email."}
         </p>
       </AuthLayout>
     );

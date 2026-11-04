@@ -33,18 +33,32 @@ import { sweepAgentNumbers } from '../_shared/numberOps.ts';
 import { notifyRegistration } from '../_shared/a2pNotify.ts';
 import { syncPrimary } from '../_shared/numbers.ts';
 
+// Whole-run budget: the function's wall clock is about 150 s, so every loop below checks against this.
+const RUN_BUDGET_MS = 120000;
+const IN_FLIGHT = ['brand_submitted', 'otp_pending', 'campaign_submitted'];
+
 export default async function (req: Request) {
+  const t0 = Date.now();
+  const timeLeft = () => Date.now() - t0 < RUN_BUDGET_MS;
   try {
     const { base44 } = await adminContext(req);
     if (!twilioConfigured()) return Response.json({ skipped: 'Twilio not connected' });
     const E = base44.asServiceRole.entities;
-    const page = await E.A2PRegistration.filter({ status: { $in: ['brand_submitted', 'otp_pending', 'campaign_submitted', 'approved'] } }, { sort: 'last_checked_at', limit: 40 });
+    // Two pages instead of one mixed one: the in-flight registrations (least recently checked first) never
+    // get crowded out by the long tail of approved rows, which only matter when a new number must be attached.
+    const inFlight = await E.A2PRegistration.filter({ status: { $in: IN_FLIGHT } }, { sort: 'last_checked_at', limit: 40 });
+    const approvedPage = await E.A2PRegistration.filter({ status: 'approved' }, { sort: 'last_checked_at', limit: 20 });
     let checked = 0, approved = 0, errors = 0;
-    for (const reg of page.items) {
+    for (const reg of [...inFlight.items, ...approvedPage.items]) {
+      if (!timeLeft()) break;
       if (!reg.brand_sid) continue;
       const s = await agentSettings(base44, reg.agent_email);
       if (!s) continue;
-      if (reg.status === 'approved' && (!s.phone_number || reg.number_attached === s.phone_number)) continue;
+      if (reg.status === 'approved' && (!s.phone_number || reg.number_attached === s.phone_number)) {
+        // Nothing to do, but move it to the back of the least-recently-checked queue so the approved page rotates.
+        await E.A2PRegistration.update(reg.id, { last_checked_at: new Date().toISOString() }).catch(() => {});
+        continue;
+      }
       try { const next = await advanceRegistration(E, s, reg); checked++; await notifyRegistration(base44, s, reg, next).catch((e) => console.error('A2P notice failed', reg.agent_email, (e as Error).message)); if (next.status === 'approved' && reg.status !== 'approved') { approved++; await tryActivate(E, { ...s, a2p_status: 'approved' }).catch(() => false); } }
       catch (e) { errors++; await E.A2PRegistration.update(reg.id, { last_checked_at: new Date().toISOString() }).catch(() => {}); console.error('A2P advance failed', reg.agent_email, (e as Error).message); }
     }
@@ -52,6 +66,7 @@ export default async function (req: Request) {
     // Rejected campaigns an administrator fixed and flagged: resubmit on the approved brand and tell the agent.
     let resubmitted = 0;
     for (const reg of (await E.A2PRegistration.filter({ status: 'rejected', resubmit_requested: true }, { limit: 20 })).items) {
+      if (!timeLeft()) break;
       const s = await agentSettings(base44, reg.agent_email);
       if (!s || !reg.campaign_sid) continue;
       try { const out = await resubmitCampaign(E, s, reg); resubmitted++; await notifyRegistration(base44, s, reg, out.reg).catch((e) => console.error('A2P resubmit notice failed', reg.agent_email, (e as Error).message)); }
@@ -59,17 +74,19 @@ export default async function (req: Request) {
     }
     // Phone numbers: registration, call routing, monthly fees, caller trust and health.
     let numberAgents = 0;
-    const started = Date.now();
     // First run after multi-number launch: give every existing number its PhoneNumber record.
     for (const a of (await E.TwilioAccount.filter({ phone_number: { $exists: true, $nin: ['', null] } }, { limit: 500, fields: ['agent_email'] })).items) {
+      if (!timeLeft()) break;
       if ((await E.PhoneNumber.count({ agent_email: a.agent_email })) > 0) continue;
       const s1 = await agentSettings(base44, a.agent_email); if (s1) await syncPrimary(E, s1).catch(() => {});
     }
-    const owners = [...new Set((await E.PhoneNumber.filter({ status: { $ne: 'released' } }, { limit: 500, fields: ['agent_email'] })).items.map((r: any) => r.agent_email))];
+    // Owners whose numbers were checked longest ago go first, so every agent gets a turn across runs.
+    const numbers = (await E.PhoneNumber.filter({ status: { $ne: 'released' } }, { sort: 'health_checked_at', limit: 500, fields: ['agent_email', 'health_checked_at'] })).items;
+    const owners = [...new Set(numbers.map((r: any) => r.agent_email))];
     if (owners.length) {
       const config = await configFor(E);
       for (const email of owners) {
-        if (Date.now() - started > 150000) break;
+        if (!timeLeft()) break;
         const s2 = await agentSettings(base44, String(email)); if (!s2) continue;
         try { await sweepAgentNumbers(E, s2, config); numberAgents++; } catch (e) { console.error('Number sweep failed', email, (e as Error).message); }
       }

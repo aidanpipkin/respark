@@ -1,7 +1,7 @@
 // Public, no-login demo for the marketing site: a visitor plays a lead and texts the real
 // Trucker IUL AI (fictional agent and agency). Nothing is sent or saved. Rate limited per visitor
 // and per day so it can't run up the AI bill.
-import { createClientFromRequest } from '../_shared/runtime.ts';
+import { createClientFromRequest, clientIp } from '../_shared/runtime.ts';
 import { resilient } from '../_shared/entityRetry.ts';
 import { invokeLLM } from '../_shared/llm.ts';
 import { guardrailCheck, stopRequested, sensitiveInput, replySchema } from '../_shared/guardrails.ts';
@@ -27,7 +27,7 @@ export default async function (req: Request) {
     if (!message || message.length > 400) return Response.json({ error: 'Type a reply of up to 400 characters.' }, { status: 400 });
 
     const day = new Date().toISOString().slice(0, 10);
-    const ip = (req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || 'unknown').split(',')[0].trim().slice(0, 64);
+    const ip = clientIp(req);
     if (!(await bump(E, `demo:day:${day}`, PER_DAY))) return Response.json({ error: 'The demo is very popular today. Sign up to try it with your own leads.' }, { status: 429 });
     if (!(await bump(E, `demo:ip:${day}:${ip}`, PER_VISITOR))) return Response.json({ error: "That's the end of the free demo. Start your account to keep going with your own leads." }, { status: 429 });
 

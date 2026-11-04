@@ -17,7 +17,9 @@ export default async function (req: Request) {
       const d = input.document || {};
       const name = String(d.name || '').trim().slice(0, 100);
       if (!name) throw new Error('Name the document.');
-      if (!/^https:\/\/\S+$/.test(d.url || '')) throw new Error('Upload the PDF or paste an https link.');
+      // Either an https link or the durable storage path from UploadFile ("files/<date>/<id>-<name>.pdf"); stored
+      // paths are signed when the admin opens them and when the booked-call email is sent.
+      if (!/^(https:\/\/\S+|files\/\S+)$/.test(d.url || '')) throw new Error('Upload the PDF or paste an https link.');
       const products = (Array.isArray(d.products) ? d.products : ['iul']).filter((p: string) => PRODUCTS.includes(p));
       if (d.id !== BUYERS_GUIDE.id && d.approved !== true) throw new Error('Confirm this is a carrier-approved, consumer-facing piece.');
       const doc = { id: d.id || crypto.randomUUID(), name, url: d.url, products: products.length ? products : ['iul'], active: d.active !== false, approved: d.approved === true || d.id === BUYERS_GUIDE.id, note: String(d.note || '').slice(0, 200), updated_at: new Date().toISOString() };

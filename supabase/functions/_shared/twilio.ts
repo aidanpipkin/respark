@@ -90,7 +90,17 @@ export async function ensureSubaccount(E: any, s: any) {
   const match = (list.accounts || []).find((a: any) => a.sid !== master.sid && a.friendly_name === name);
   let sid = match?.sid, source = 'matched';
   if (!sid) { const created = await tw(master, `${API}/Accounts.json`, { FriendlyName: name }); sid = created.sid; source = 'created'; }
-  await E.TwilioAccount.create({ agent_email: s.agent_email, subaccount_sid: sid, friendly_name: name, location_id: s.location_id || '', source, created_at: new Date().toISOString() });
+  try {
+    await E.TwilioAccount.create({ agent_email: s.agent_email, subaccount_sid: sid, friendly_name: name, location_id: s.location_id || '', source, created_at: new Date().toISOString() });
+  } catch (e) {
+    // Unique index on twilio_account(lower(agent_email)): a parallel call recorded its subaccount first. Use that one
+    // and log ours so an admin can close the orphan in the Twilio console.
+    if ((e as { code?: string })?.code !== '23505') throw e;
+    const winner = (await E.TwilioAccount.filter({ agent_email: s.agent_email }, { limit: 1 })).items[0];
+    if (!winner?.subaccount_sid) throw e;
+    if (winner.subaccount_sid !== sid) console.error(`[twilio] orphaned subaccount ${sid} (${source}) for ${s.agent_email}: ${winner.subaccount_sid} was recorded first`);
+    return winner.subaccount_sid as string;
+  }
   return sid as string;
 }
 

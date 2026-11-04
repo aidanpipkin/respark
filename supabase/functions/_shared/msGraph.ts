@@ -9,6 +9,8 @@
 //   - appointmentJourney: a booked call becomes an Outlook event with the lead invited (when they have an email).
 // Nothing here runs when the secrets are missing or the agent has not connected, so every caller stays additive.
 
+import { timingSafeEqual } from './runtime.ts';
+
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 const SCOPES = 'offline_access openid email User.Read Calendars.ReadWrite';
 
@@ -105,7 +107,7 @@ export async function signState(email: string, ttlMs = 15 * 60000) {
 }
 export async function verifyState(state: string): Promise<string | null> {
   const [payload, sig] = String(state || '').split('.');
-  if (!payload || !sig || sig !== await hmac(payload)) return null;
+  if (!payload || !sig || !timingSafeEqual(sig, await hmac(payload))) return null;
   try {
     const { e, x } = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
     return typeof e === 'string' && Number(x) > Date.now() ? e : null;

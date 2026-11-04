@@ -12,8 +12,22 @@ type Params = { prompt: string; model?: string; response_json_schema?: any; syst
 
 const ANTHROPIC_DEFAULT = 'claude-sonnet-5-5';
 const OPENAI_DEFAULT = 'gpt-5-mini';
+// Anthropic model ids a campaign may select (Campaign.ai_model / p.model). Anything else falls back to
+// LLM_MODEL or the default, so a stale or mistyped id stored on a campaign never breaks replies.
+export const ANTHROPIC_MODELS = new Set(['claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-opus-5-5', 'claude-sonnet-4-5', 'claude-haiku-4-5']);
 
 function key(name: string) { try { return String(secrets.get(name) || '').trim(); } catch { return ''; } }
+
+// Per-isolate cap on concurrent provider calls (LLM_MAX_INFLIGHT, default 6). A worker handling many
+// replies at once would otherwise open dozens of 60 s sockets and trip the provider's rate limit.
+const MAX_INFLIGHT = Math.max(1, Number(key('LLM_MAX_INFLIGHT')) || 6);
+let inflight = 0;
+const waiters: Array<() => void> = [];
+async function acquire() { if (inflight < MAX_INFLIGHT) { inflight++; return; } await new Promise<void>(r => waiters.push(r)); inflight++; }
+function release() { inflight--; const next = waiters.shift(); if (next) next(); }
+/** How many provider calls this isolate has in flight (diagnostics and tests). */
+export function llmInflight() { return { inflight, waiting: waiters.length, max: MAX_INFLIGHT }; }
+async function limited<T>(fn: () => Promise<T>): Promise<T> { await acquire(); try { return await fn(); } finally { release(); } }
 
 /** Which engine will answer, for diagnostics. */
 export function llmProvider() {
@@ -24,23 +38,42 @@ export function llmProvider() {
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+/** Retry-After header (seconds or an HTTP date) as milliseconds, or null when absent/unparseable. */
+export function retryAfterMs(header: string | null | undefined): number | null {
+  const v = String(header || '').trim();
+  if (!v) return null;
+  if (/^\d+$/.test(v)) return Number(v) * 1000;
+  const at = Date.parse(v);
+  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
+}
+
+const BACKOFF_CAP_MS = 8000;
 async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
   let last: any;
   for (let i = 0; i < tries; i++) {
     try { return await fn(); } catch (e: any) {
       last = e;
-      if (!e?.retryable) break;
-      await sleep(Math.min(8000, 600 * 2 ** i) + Math.random() * 400);
+      if (!e?.retryable || i === tries - 1) break;
+      // Honour the provider's Retry-After on 429/5xx (capped), otherwise exponential backoff.
+      const hinted = typeof e?.retryAfterMs === 'number' ? e.retryAfterMs : null;
+      await sleep(Math.min(BACKOFF_CAP_MS, hinted ?? 600 * 2 ** i) + Math.random() * 400);
     }
   }
   throw last;
 }
 
 async function post(url: string, headers: Record<string, string>, body: any) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) });
-  const text = await r.text();
-  if (!r.ok) { const err: any = new Error(`AI provider ${r.status}: ${text.slice(0, 200)}`); err.retryable = r.status === 429 || r.status >= 500; throw err; }
-  return JSON.parse(text);
+  return await limited(async () => {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) });
+    const text = await r.text();
+    if (!r.ok) {
+      const err: any = new Error(`AI provider ${r.status}: ${text.slice(0, 200)}`);
+      err.status = r.status; err.retryable = r.status === 429 || r.status >= 500;
+      const ra = retryAfterMs(r.headers.get('retry-after')); if (ra !== null) err.retryAfterMs = ra;
+      throw err;
+    }
+    return JSON.parse(text);
+  });
 }
 
 function cleanSchema(schema: any): any {
@@ -48,8 +81,15 @@ function cleanSchema(schema: any): any {
   return schema && typeof schema === 'object' ? schema : { type: 'object', properties: {} };
 }
 
+/** The Anthropic model for a call: the caller's choice when it is a known id, else the configured default. */
+export function anthropicModel(p: Pick<Params, 'model' | 'tier'>) {
+  const asked = String(p.model || '').trim();
+  if (asked && ANTHROPIC_MODELS.has(asked)) return asked;
+  return (p.tier === 'writer' && key('LLM_WRITER_MODEL')) || key('LLM_MODEL') || ANTHROPIC_DEFAULT;
+}
+
 async function anthropic(p: Params, apiKey: string) {
-  const model = (p.tier === 'writer' && key('LLM_WRITER_MODEL')) || key('LLM_MODEL') || ANTHROPIC_DEFAULT;
+  const model = anthropicModel(p);
   const structured = !!p.response_json_schema;
   const body: any = { model, max_tokens: p.max_tokens || 1200, messages: [{ role: 'user', content: p.prompt }] };
   const systemBlocks: any[] = [];

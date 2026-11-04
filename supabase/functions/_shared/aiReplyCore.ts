@@ -13,7 +13,7 @@ import { leadProfile } from './leadProfile.ts';
 import { leadContext } from './leadContext.ts';
 const clientHold=async(E,lead,reason)=>E.Lead.update(lead.id,{needs_human_reason:String(reason).slice(0,300)});
 import { DEFAULT_MODEL } from './sequenceWriter.ts';
-import { replyDelaySeconds,sleep } from './messageTiming.ts';
+import { replyDelaySeconds,sleep,MAX_INLINE_WAIT_S } from './messageTiming.ts';
 import { smsClean,nonGsm,aiTells } from './smsText.ts';
 import { isTestLead } from './rehearsal.ts';
 // States that cap texts at 3 per 24 hours on the same subject. Conversation replies count there too.
@@ -48,12 +48,17 @@ export async function replyToInbound(base44,messageLogId,opts:any={}){let job,s,
   // Wait like a person would. If they text again meanwhile, this draft is discarded and a fresh reply covers both messages.
   let wait=replyDelaySeconds(inbound,draft.proposed_text,{quick:opts.quick===true||/^[12]$/.test(choice)});if(isTestLead(lead))wait=Math.min(wait,5);
   if(CAPPED_STATES.includes(String(lead.state||'').toUpperCase())){const day=await E.MessageLog.filter({agent_email:s.agent_email,lead_id:lead.id,event_type:'sms_sent',occurred_at:{$gte:new Date(Date.now()-86400000).toISOString()}},{sort:'occurred_at',limit:3});if(day.items.length>=3){const free=Date.parse(day.items[0].occurred_at)+86400000+60000;await E.AIDraft.update(draft.id,{send_after:new Date(free).toISOString()});return ({held:'state contact limit',send_after:new Date(free).toISOString()});}}
-  await E.AIDraft.update(draft.id,{send_after:new Date(Date.now()+wait*1000).toISOString()});
+  const sendAfter=new Date(Date.now()+wait*1000).toISOString();await E.AIDraft.update(draft.id,{send_after:sendAfter});
+  // A long human-like wait is not spent inside this request: the agent's sequence worker delivers the draft once send_after passes.
+  if(wait>MAX_INLINE_WAIT_S){if(holdAfter)await flagHuman(base44,s,lead,holdAfter).catch(()=>null);return ({drafted:true,deferred_to_engine:true,send_after:sendAfter});}
   await sleep(wait*1000);
   const current=await E.AIDraft.get(draft.id);if(current.status!=='pending')return ({skipped:'Reply replaced or handled'});
   const latest=await E.Lead.get(lead.id);if(latest.last_inbound_at!==message.occurred_at||latest.ai_paused)return ({skipped:'Conversation changed'});
   const sent=await deliverDraft(base44,current,'automatic');if(holdAfter)await flagHuman(base44,s,lead,holdAfter).catch(()=>null);return (sent);}if(holdAfter)await flagHuman(base44,s,lead,holdAfter).catch(()=>null);return ({drafted:true});
- }catch(error){if(job&&base44){await finishJob(base44,job,{error:'Reply generation needs review.'},'uncertain');if(s&&lead)await flagHuman(base44,s,lead,'Suggested reply preparation failed. Please reply personally.');}throw error;}}
+ }catch(error){
+  // The AI provider was down (LLMUnavailable): hand the job back so the sweep retries it; the lead is not flagged and gets no text.
+  if(error?.name==='Transient'&&job&&base44){await base44.asServiceRole.entities.MessageDispatch.update(job.id,{state:'new',token:'',result:{retry:true,at:new Date().toISOString(),error:String(error.message||'').slice(0,300)}}).catch(()=>null);throw error;}
+  if(job&&base44){await finishJob(base44,job,{error:'Reply generation needs review.'},'uncertain');if(s&&lead)await flagHuman(base44,s,lead,'Suggested reply preparation failed. Please reply personally.');}throw error;}}
 /** Safety net: any inbound text from the last 30 minutes that never got an AI pass gets one now. */
 export async function sweepUnanswered(base44, s, limit = 5) {
   const E = base44.asServiceRole.entities;
@@ -62,7 +67,8 @@ export async function sweepUnanswered(base44, s, limit = 5) {
   let done = 0;
   for (const m of logs.items) {
     if (done >= limit) break;
-    const seen = await E.MessageDispatch.count({ key: `ai:${s.agent_email}:${m.ghl_message_id || m.id}` });
+    // A job handed back to 'new' (AI provider outage) counts as unseen, so it is retried here.
+    const seen = await E.MessageDispatch.count({ key: `ai:${s.agent_email}:${m.ghl_message_id || m.id}`, state: { $ne: 'new' } });
     if (seen) continue;
     try { await replyToInbound(base44, m.id, { quick: true }); } catch { /* recorded on the job */ }
     done++;

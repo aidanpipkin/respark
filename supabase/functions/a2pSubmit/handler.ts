@@ -92,17 +92,26 @@ export default async function (req: Request) {
     // are kept by the upsert below and submitToTwilio resumes from them instead of creating duplicates.
     const resume = existing?.provider_step === 'profile' && /^Submitting/i.test(String(existing.review_note || ''));
     if (resume) await setupLog(E, s, 'a2p_resume', `Resuming an interrupted carrier submission (profile ${existing.customer_profile_sid || 'none'}, trust ${existing.trust_product_sid || 'none'}, brand ${existing.brand_sid || 'none'}).`);
+    // One submission at a time per agent (same ProvisioningTask lock as purchaseNumber): two tabs pressing Submit
+    // together would otherwise register two brands, and each brand registration is billed.
+    const lockKey = `a2p_submit:${s.agent_email}`;
+    const lock = await E.ProvisioningTask.filter({ key: lockKey }, { limit: 1 });
+    if (lock.items[0]?.status === 'working' && Date.now() - Date.parse(lock.items[0].updated_date || 0) < 180000) throw new Error('Your registration is already being submitted. Give it a minute, then refresh.');
+    await E.ProvisioningTask.upsert([{ key: lockKey, agent_email: s.agent_email, kind: 'a2p_submit', status: 'working', public_note: 'Submitting your texting registration…' }], { key: 'key' });
+    const unlock = (status: string, note: string) => E.ProvisioningTask.upsert([{ key: lockKey, agent_email: s.agent_email, kind: 'a2p_submit', status, public_note: note }], { key: 'key' }).catch(() => {});
     const saved = await E.A2PRegistration.upsert([{ ...data, ein_last4: ein.slice(-4), agent_email: s.agent_email, status: 'draft', provider_step: 'profile', review_note: 'Submitting to the carriers…' }], { key: 'agent_email' });
     let reg = saved.records[0];
     try {
       reg = await submitToTwilio(E, s, c, reg, ein);
     } catch (error) {
-      if (error instanceof PlatformNotReady) return await wait();
+      if (error instanceof PlatformNotReady) { await unlock('queued', 'Waiting on platform Twilio ISV setup.'); return await wait(); }
       const message = String((error as Error).message || 'Registration could not be submitted.').slice(0, 1500);
       await E.A2PRegistration.update(reg.id, { status: 'draft', review_note: message, provider_step: 'profile' });
       await setupLog(E, s, 'a2p_error', `Twilio registration failed: ${message.slice(0, 300)}`, 400);
+      await unlock('queued', 'The last submission failed; you can submit again.');
       return Response.json({ error: message }, { status: 400 });
     }
+    await unlock('done', 'Brand submitted to the carriers.');
     await markPlatform(E, true);
     await E.AgentSettings.update(s.id, { a2p_status: 'brand_submitted' });
     await checklist(E, s, 'texting', false);

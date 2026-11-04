@@ -1,9 +1,10 @@
 // Tells the agent (and the owner) when their texting registration changes stage.
 // Every notice is sent once per registration and stage, no matter how often the tracker runs.
+import { appOrigin } from './runtime.ts';
 import { textAgent, emailAgent } from './agentNotify.ts';
 import { raise } from './signals.ts';
 
-const LINK = 'https://respark-pipkingroup.com';
+const LINK = appOrigin();
 
 export type Stage = 'brand_approved' | 'approved' | 'rejected' | 'resubmitted';
 

@@ -1,6 +1,6 @@
 // Public "Add to Apple / Outlook calendar" link for a booked call. The token in the link is the
 // only key; it is random per appointment and shows nothing beyond the call itself.
-import { createClientFromRequest } from '../_shared/runtime.ts';
+import { createClientFromRequest, timingSafeEqual } from '../_shared/runtime.ts';
 import { resilient } from '../_shared/entityRetry.ts';
 import { icsFor } from '../_shared/appointmentJourney.ts';
 
@@ -12,7 +12,7 @@ export default async function (req: Request) {
     const base44 = resilient(createClientFromRequest(req));
     const E = base44.asServiceRole.entities;
     const appt = await E.Appointment.get(id).catch(() => null);
-    if (!appt || appt.invite_token !== token) return new Response('Not found', { status: 404 });
+    if (!appt || !timingSafeEqual(String(appt.invite_token || ''), token)) return new Response('Not found', { status: 404 });
     if (appt.status !== 'booked') return new Response('This call was moved or cancelled. Check your latest text or email for the current time.', { status: 410, headers: { 'Content-Type': 'text/plain' } });
     const s = (await E.AgentSettings.filter({ agent_email: appt.agent_email }, { limit: 1 })).items[0] || {};
     const seq = Object.keys(appt.journey || {}).filter(k => k.startsWith('booked@')).length;

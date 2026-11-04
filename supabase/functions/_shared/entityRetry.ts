@@ -16,17 +16,23 @@ export function isInfraError(e: any): boolean {
 
 function retryAfterMs(e: any): number {
   const m = String(e?.message || '').match(/retry after (\d+)\s*s/i);
-  return m ? Number(m[1]) * 1000 : 3000;
+  return m ? Number(m[1]) * 1000 : 1000;
 }
 
-async function withRetry(fn: () => Promise<any>, tries = 5) {
+// On Postgres the adapter never rate-limits, so the wrapper only covers short connection blips.
+// Keep it cheap: a worker runs inside a ~90 s budget, and a long retry ladder on a dead database
+// would eat it (and hold a pooler slot) for nothing. ENTITY_RETRY_TRIES overrides the default of 2.
+const TRIES = Math.max(1, Number(Deno.env.get('ENTITY_RETRY_TRIES')) || 2);
+const BASE_MS = 250, CAP_MS = 1500, JITTER_MS = 250;
+
+export async function withRetry(fn: () => Promise<any>, tries = TRIES) {
   let last: any;
   for (let i = 0; i < tries; i++) {
     try { return await fn(); } catch (e) {
       last = e;
       if (!isInfraError(e) || i === tries - 1) throw e;
-      const base = isRateLimit(e) ? retryAfterMs(e) : 800 * 2 ** i;
-      await sleep(Math.min(base, 20000) + Math.floor(Math.random() * 1500));
+      const base = isRateLimit(e) ? retryAfterMs(e) : BASE_MS * 2 ** i;
+      await sleep(Math.min(base, CAP_MS) + Math.floor(Math.random() * JITTER_MS));
     }
   }
   throw last;

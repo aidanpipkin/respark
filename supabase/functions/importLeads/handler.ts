@@ -1,5 +1,6 @@
 // Self-serve lead import. The browser sends rows in chunks of up to 100; each row becomes a GHL
 // contact plus a LeadRespark lead enrolled in the chosen campaign, with the agent's consent attestation.
+import { clientIp } from '../_shared/runtime.ts';
 import { setupContext } from '../_shared/setupAccess.ts';
 import { ghl, scope, failure } from '../_shared/ghl.ts';
 import { freshSettings } from '../_shared/ghlAuth.ts';
@@ -87,7 +88,7 @@ export default async function (req: Request) {
     const seller = businessName(s);
     const attestedAt = new Date().toISOString();
     const attestedBy = ctx.user?.email || s.agent_email;
-    const ip = (req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || '').split(',')[0].trim().slice(0, 64);
+    const ip = clientIp(req) === 'unknown' ? '' : clientIp(req);
     const userAgent = (req.headers.get('user-agent') || '').slice(0, 200);
     // What the agent actually ticked. The registry scrub is optional: written consent already makes it unnecessary.
     const registryScrubbed = input.registry_scrubbed === true;

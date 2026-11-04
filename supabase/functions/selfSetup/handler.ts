@@ -55,7 +55,13 @@ export default async function (req: Request) {
     if (!s) {
       if (config.self_serve_enabled === false && user.role !== 'admin') throw new Error('New signups are paused. Contact the platform administrator.');
       const first = String(user.full_name || '').split(' ')[0] || '';
-      s = await E.AgentSettings.create({ agent_email: user.email, first_name: first, display_name: user.full_name || first, notification_email: user.email, business_email: user.email, status: 'onboarding', mode: 'review', self_serve: true, onboarding_step: 1 });
+      try { s = await E.AgentSettings.create({ agent_email: user.email, first_name: first, display_name: user.full_name || first, notification_email: user.email, business_email: user.email, status: 'onboarding', mode: 'review', self_serve: true, onboarding_step: 1 }); }
+      catch (e) {
+        // A parallel request created the row first (unique index on lower(agent_email)): use theirs.
+        if ((e as { code?: string })?.code !== '23505') throw e;
+        s = (await E.AgentSettings.filter({ agent_email: user.email }, { limit: 1 })).items[0];
+        if (!s) throw e;
+      }
     }
     const connected = !!(await agencyOAuthToken(base44).catch(() => null));
     if (config.self_serve_requires_approval === true && !s.beta_access && !s.location_id) {

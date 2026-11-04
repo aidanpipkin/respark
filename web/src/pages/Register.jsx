@@ -34,6 +34,7 @@ export default function Register() {
       if (result?.session) { window.location.href = safeReturnTo() === "/" ? "/welcome" : safeReturnTo(); return; }
       setShowOtp(true);
     } catch (err) {
+      // 409: the email is already registered — show it here, never the code screen.
       setError(err.message || "Registration failed");
     } finally {
       setLoading(false);
@@ -61,8 +62,8 @@ export default function Register() {
     try {
       await base44.auth.resendOtp(email);
       toast({
-        title: "Code sent",
-        description: "Check your email for the new code.",
+        title: "Email sent",
+        description: "Check your inbox for the new code or link.",
       });
     } catch (err) {
       setError(err.message || "Failed to resend code");
@@ -78,7 +79,7 @@ export default function Register() {
       <AuthLayout
         icon={Mail}
         title="Verify your email"
-        subtitle={`We sent a code to ${email}`}
+        subtitle={`We sent an email to ${email}. Enter the 6-digit code from it, or just click the link in it.`}
       >
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
@@ -118,7 +119,7 @@ export default function Register() {
           )}
         </Button>
         <p className="text-center text-sm text-muted-foreground mt-4">
-          Didn't receive the code?{" "}
+          Didn't receive the email?{" "}
           <button onClick={handleResend} className="text-primary font-medium hover:underline">
             Resend
           </button>

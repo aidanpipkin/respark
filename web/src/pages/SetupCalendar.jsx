@@ -23,6 +23,15 @@ export default function SetupCalendar() {
   const flashCls = k => (flash[k] ? 'lr-done' : '');
   const ERR = { hours: 'Hours not saved', meet: 'Link not saved', disconnect: 'Could not disconnect', feed: 'Calendar not connected', off: 'Days off not saved' };
   useEffect(() => { if (data) { setHours(data.hours); setMax(data.max_calls_per_day); setBlocked(data.blocked_dates); setMeet(data.meeting_link || ''); } }, [data]);
+  // The Microsoft 365 OAuth callback (msOAuth edge function) sends the browser back here with ?ms=connected|error.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ms = params.get('ms');
+    if (!ms) return;
+    if (ms === 'connected') notify.ok('Microsoft 365 calendar connected', params.get('email') ? `Busy times from ${params.get('email')} are kept off your booking times.` : '');
+    else notify.err(params.get('message') || 'Microsoft did not complete the connection.', 'Calendar not connected');
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []);
 
   async function save(kind, body, note, detail = '') {
     setBusy(kind);

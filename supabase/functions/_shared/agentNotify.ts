@@ -2,6 +2,7 @@
 // Texts go from the agent's LeadRespark number to their own mobile; if that number isn't on
 // Twilio yet, they go through the GHL sub-account instead. Deduplicated by key.
 import { ghl } from './ghl.ts';
+import { appOrigin } from './runtime.ts';
 import { sendRawText, e164 } from './smsTransport.ts';
 import { localParts } from './messageClock.ts';
 import { platformConfig } from './credits.ts';
@@ -106,7 +107,7 @@ export async function notifyReply(base44: any, s: any, lead: any, body: string, 
   if (pref === 'off' || (pref === 'needs_you' && !opts.needsYou)) return { skipped: 'preference' };
   if (!agentPhone(s)) return { skipped: 'no agent mobile' };
   const E = base44.asServiceRole.entities;
-  const origin = opts.origin || 'https://respark-pipkingroup.com';
+  const origin = opts.origin || appOrigin();
   const now = Date.now();
   const hourAgo = new Date(now - 3600000).toISOString();
   const recent = await E.MessageDispatch.count({ agent_email: s.agent_email, kind: 'alert', key: { $regex: '^agent:reply:' }, created_date: { $gte: hourAgo } }).catch(() => 0);

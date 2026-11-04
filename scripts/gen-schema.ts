@@ -21,6 +21,13 @@ type Entity = { name: string; properties?: Record<string, Prop>; required?: stri
 
 // Indexes beyond the per-table agent_email index. `unique:` marks keys the code upserts on and
 // expects to be single rows (engine cursors, dispatch jobs, singletons).
+// NULLS-FIRST RULE: entities.ts sorts `ASC NULLS FIRST, id ASC` (and `DESC NULLS LAST, id DESC`), so an
+// index that is meant to back a sorted scan on a nullable text column (next_send_at, last_time,
+// created_date in ai_draft, ...) must declare that column `nulls first` and end with "id", or Postgres
+// cannot use it for the ORDER BY. The generator still emits plain indexes (filters only); the sorted
+// scan indexes are hand-written in supabase/migrations/20261104180000_scale_fixes.sql (lead_due_idx,
+// conversation_summary_agent_email_last_time_idx, ai_draft_agent_email_status_created_date_idx).
+// Teach addIndex a `nullsFirst` option before re-running the generator for a sort index.
 const INDEXES: Record<string, Array<string[] | { unique: string[] }>> = {
   Lead: [
     ['agent_email', 'status', 'next_send_at'], ['agent_email', 'campaign_id'], ['agent_email', 'phone'],

@@ -60,8 +60,8 @@ export default async function (req: Request) {
       if (input.confirm !== true) throw new Error('Confirm the monthly subscription first.');
       const code = String(input.code || '').trim();
       if (code) await codeAttempt(E, user.id);
-      const nonce = typeof input.nonce === 'string' && /^[\w-]{8,64}$/.test(input.nonce) ? input.nonce : crypto.randomUUID();
-      const result = await subscribe(E, s, code, nonce);
+      // The Stripe idempotency key is derived server-side (billing account + previous subscription), never from the client.
+      const result = await subscribe(E, s, code);
       if (result.client_secret) return Response.json({ ...(await view(E, s)), client_secret: result.client_secret });
       await tryActivate(E, await E.AgentSettings.get(s.id)).catch(() => {});
       await rewardReferrals(base44, { referee_email: s.agent_email }).catch(() => 0);

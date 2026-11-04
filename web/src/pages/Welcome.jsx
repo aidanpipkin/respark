@@ -78,6 +78,7 @@ export default function Welcome() {
   const [error, setError] = useState('');
   const [looks, setLooks] = useState(false);
   const started = useRef(false);
+  const runningSince = useRef(0);
   const workspace = qc.getQueryData(['workspace']);
   const email = workspace?.user?.email || '';
   // Admin-only QA: /welcome?preview=new|pending|approved shows the first-run screen with sample data. Nothing is saved.
@@ -88,7 +89,13 @@ export default function Welcome() {
     queryFn: () => preview ? Promise.resolve(sampleSetup(preview)) : call('selfSetup', { action: 'status' }),
     refetchInterval: q => {
       const st = q.state.data?.provisioning?.state;
-      return st === 'running' ? 2500 : st === 'awaiting_connection' ? 20000 : st === 'awaiting_approval' ? 60000 : false;
+      if (st === 'running') {
+        // Poll every 5 s while the workspace builds; after two minutes back off to 15 s.
+        if (!runningSince.current) runningSince.current = Date.now();
+        return Date.now() - runningSince.current > 2 * 60 * 1000 ? 15000 : 5000;
+      }
+      runningSince.current = 0;
+      return st === 'awaiting_connection' ? 20000 : st === 'awaiting_approval' ? 60000 : false;
     },
   });
 

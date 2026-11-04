@@ -1,9 +1,13 @@
 import { isInfraError } from '../_shared/entityRetry.ts';
 // Sequence sender, built to scale to 1,000+ agents.
-//  - Dispatcher (scheduled, no agent_email): pages through live agents and runs one worker per agent,
-//    PARALLEL at a time, continuing in a follow-up run if it nears the time limit.
-//  - Worker ({agent_email}): sends that agent's due follow-ups and autopilot replies, under a short lock
-//    so overlapping runs never process the same agent twice.
+//  - Worker ({agent_email, hop}): sends that agent's due follow-ups and autopilot replies, under a short
+//    lock so overlapping runs never process the same agent twice. Stops at WORKER_DEADLINE_MS and, when
+//    work is left, chains one more call to itself (hop + 1, at most 6 hops) after releasing the lock.
+//  - Fan-out: pg_cron calls public.sequence_fanout() every minute, which invokes one worker per live
+//    agent straight from Postgres (no dispatcher function on the hot path).
+//  - Housekeeping ({housekeeping: true}, every 5 minutes): welcome emails, stuck-dispatch reaper, heartbeat.
+//  - Legacy dispatcher (no body): still pages through agents and fans out from inside the function, for
+//    the parked 5-minute cron and manual runs.
 import { adminContext } from '../_shared/agentAccess.ts';
 import { isRehearsal, isTestLead, TEST_PHONE_RE } from '../_shared/rehearsal.ts';
 import { heartbeat, bump, flushBumps } from '../_shared/signals.ts';
@@ -53,23 +57,38 @@ async function budget(base44: any, E: any, s: any) {
 }
 
 const PARALLEL = 60;
-// New leads started per agent per 5-minute run. Spreads first texts out, which carriers favor for new numbers.
-const PER_AGENT_PER_RUN = 60;
+// New leads started per agent per run (a run is one minute tick, or one hop). Spreads first texts out, which carriers favor for new numbers.
+const PER_AGENT_PER_RUN = 20;
+// A partial worker chains itself at most this many times per tick before leaving the rest to the next minute.
+const MAX_HOPS = 6;
 // Default daily follow-up budget per agent: the T-Mobile cap for a new, unvetted 10DLC brand. Admins can raise it per agent.
 const DEFAULT_DAILY_CAP = 2000;
 const LOCK_MS = 4 * 60 * 1000;
 
-async function claimAgent(E: any, email: string) {
+/**
+ * Per-agent lock in EngineCursor (`seqlock:<email>`, cursor = claim timestamp). A minute tick that
+ * lands while a worker still holds the lock skips the agent (the running worker, or its hop chain,
+ * carries on). A lock older than LOCK_MS is treated as abandoned by a killed isolate and taken over.
+ * Returns the row id and the claim value, so the release can be conditional on still owning it.
+ */
+export async function claimAgent(E: any, email: string): Promise<{ id: string; claim: string } | false> {
   const key = `seqlock:${email}`;
   const now = Date.now();
   const row = (await E.EngineCursor.upsert([{ key }], { key: 'key' })).records[0];
   if (Number(row.cursor || 0) > now - LOCK_MS) return false;
-  const claimed = await E.EngineCursor.updateMany({ id: row.id, cursor: row.cursor ?? null }, { $set: { cursor: String(now) } });
-  return Number(claimed?.updated || 0) > 0 ? row.id : false;
+  const claim = String(now);
+  const claimed = await E.EngineCursor.updateMany({ id: row.id, cursor: row.cursor ?? null }, { $set: { cursor: claim } });
+  return Number(claimed?.updated || 0) > 0 ? { id: row.id, claim } : false;
 }
 
-// A worker stops cleanly at this age and returns partial counts (functions are killed at 5 minutes).
-const WORKER_DEADLINE_MS = 150000;
+// Edge functions get a wall clock of about 150 s (EDGE_WALL_CLOCK_MS when the plan differs). A worker
+// stops cleanly well inside it and returns partial counts; the chained hop picks up where it left off.
+const WALL_MS = Number(Deno.env.get('EDGE_WALL_CLOCK_MS')) || 150000;
+const WORKER_DEADLINE_MS = Math.max(15000, Math.min(90000, WALL_MS - 45000));
+// Tests shorten the worker budget to force a partial run (SEQUENCE_WORKER_DEADLINE_MS); unset in production.
+const workerDeadlineMs = () => Number(Deno.env.get('SEQUENCE_WORKER_DEADLINE_MS')) || WORKER_DEADLINE_MS;
+// The legacy in-function dispatcher stops paging here and continues with a cursor.
+const DISPATCH_DEADLINE_MS = Math.max(15000, Math.min(60000, WALL_MS - 60000));
 // Dispatch jobs left 'working' this long with no carrier id were abandoned by a killed run.
 const STUCK_MS = 10 * 60 * 1000;
 const REAP_CAP = 200;
@@ -93,9 +112,9 @@ async function reapStuckDispatches(E: any) {
 
 async function runAgent(base44: any, E: any, raw: any) {
   const out = { sent: 0, drafted: 0, skipped: 0, failed: 0, partial: false };
-  const lockId = await claimAgent(E, raw.agent_email);
-  if (!lockId) { out.skipped++; return out; }
-  const deadline = Date.now() + WORKER_DEADLINE_MS;
+  const lock = await claimAgent(E, raw.agent_email);
+  if (!lock) { out.skipped++; return out; }
+  const deadline = Date.now() + workerDeadlineMs();
   const timeLeft = () => Date.now() < deadline;
   const stop = () => { out.partial = true; return out; };
   try {
@@ -168,7 +187,8 @@ async function runAgent(base44: any, E: any, raw: any) {
     }
     return out;
   } finally {
-    await E.EngineCursor.update(lockId, { cursor: '0' }).catch(() => {});
+    // Release only if the lock still carries our claim (a takeover after LOCK_MS must not be undone).
+    await E.EngineCursor.updateMany({ id: lock.id, cursor: lock.claim }, { $set: { cursor: '0' } }).catch(() => {});
     await flushBumps(E).catch(() => {});
   }
 }
@@ -187,18 +207,36 @@ export default async function (req: Request) {
       // No carrier-approval gate here: an approved agent runs everything, an unapproved one only their fictional test leads.
       const raw = (await E.AgentSettings.filter({ agent_email: input.agent_email, connected: true }, { limit: 1 })).items[0];
       if (!raw || !(raw.status === 'live' || raw.test_leads_at)) return Response.json({ skipped: 'not active' });
-      add(await runAgent(base44, E, raw));
-      return Response.json(totals);
+      const hop = Math.max(0, Math.floor(Number(input.hop) || 0));
+      const out = await runAgent(base44, E, raw);
+      add(out);
+      // Work left over: chain one more worker for this agent. runAgent has released the lock (finally)
+      // by now, so the chained call can claim it; a minute tick arriving meanwhile simply finds it taken.
+      let chained = false;
+      if (out.partial && hop < MAX_HOPS) {
+        chained = true;
+        waitUntil(base44.functions.invoke('sequenceSender', { agent_email: input.agent_email, hop: hop + 1 }).catch((e: Error) => console.error('[sequenceSender] hop chain failed', input.agent_email, e.message)));
+      }
+      return Response.json({ ...totals, partial: out.partial, hop, chained });
     }
 
-    // Dispatcher mode.
+    // Housekeeping mode (every 5 minutes): the once-per-platform chores the per-agent workers don't do.
+    if (input.housekeeping === true) {
+      try { await sendWelcomes(base44); } catch { /* next run */ }
+      reaped = await reapStuckDispatches(E);
+      await heartbeat(base44, 'sequence_sender', { housekeeping: true, reaped });
+      await flushBumps(E).catch(() => {});
+      return Response.json({ housekeeping: true, reaped });
+    }
+
+    // Legacy dispatcher mode (no body): fan out from inside the function.
     if (!input.cursor && input.dry_run !== true) { try { await sendWelcomes(base44); } catch { /* next run */ } }
     // Free dispatch jobs abandoned by a killed run, before any worker starts.
     if (!input.cursor && input.dry_run !== true) reaped = await reapStuckDispatches(E);
     // Rolling pool: up to PARALLEL agent workers run at once, and a new one starts the moment any
     // finishes (no waiting for the slowest agent in a batch). Each worker is its own function call
     // with its own time limit, and a per-agent lock means overlapping runs never double-send.
-    const deadline = Date.now() + 200000;
+    const deadline = Date.now() + DISPATCH_DEADLINE_MS;
     let cursor = input.cursor || (input.dry_run ? undefined : await loadCursor(base44, 'sequence'));
     const inflight = new Set<Promise<void>>();
     let launched = 0;
@@ -207,7 +245,7 @@ export default async function (req: Request) {
       const page = await E.AgentSettings.filter({ connected: true, $or: [{ status: 'live', a2p_status: 'approved' }, { test_leads_at: { $exists: true, $nin: ['', null] } }] }, { sort: 'agent_email', limit: 100, cursor, fields: ['agent_email'] });
       if (input.dry_run === true) return Response.json({ scanned_accounts: page.items.length, has_more: page.has_more });
       for (const a of page.items) {
-        const p: Promise<void> = base44.functions.invoke('sequenceSender', { agent_email: a.agent_email })
+        const p: Promise<void> = base44.functions.invoke('sequenceSender', { agent_email: a.agent_email, hop: 0 })
           .then((r: any) => add(r?.data || {}), () => { totals.failed++; })
           .finally(() => { inflight.delete(p); });
         inflight.add(p); launched++;

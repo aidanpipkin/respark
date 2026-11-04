@@ -17,6 +17,13 @@ const SLOTS: Record<string, [number, number]> = { am: [10 * 60, 12 * 60], pm: [1
  */
 export type SendRules = { weekday?: { open: string; close: string }; sunday?: { open: string; close: string }; no_sunday_states?: string[] };
 const toMin = (t: string | undefined, dflt: number) => { const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(t || '')); return m ? Number(m[1]) * 60 + Number(m[2]) : dflt; };
+// The legal band every campaign rule is clamped into (TCPA 8am to 9pm, lead-local). No send_rules
+// value can open earlier or close later than this, whatever a campaign asks for.
+export const LEGAL_FLOOR = 8 * 60, LEGAL_CEIL = 21 * 60;
+function clamp(h: [number, number]): [number, number] | null {
+  const open = Math.min(Math.max(h[0], LEGAL_FLOOR), LEGAL_CEIL), close = Math.min(Math.max(h[1], LEGAL_FLOOR), LEGAL_CEIL);
+  return close > open ? [open, close] : null;
+}
 const isSunday = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay() === 0;
 function sundayOk(rules?: SendRules | null, state?: string) {
   if (!rules?.sunday) return false;
@@ -24,8 +31,8 @@ function sundayOk(rules?: SendRules | null, state?: string) {
 }
 /** Open/close minutes for the local day `date` under the rules (null when nothing may go out that day). */
 function hoursFor(date: string, rules?: SendRules | null, state?: string): [number, number] | null {
-  if (isSunday(date)) return sundayOk(rules, state) ? [toMin(rules!.sunday!.open, 12 * 60), toMin(rules!.sunday!.close, 19 * 60 + 30)] : null;
-  return [toMin(rules?.weekday?.open, OPEN), toMin(rules?.weekday?.close, CLOSE)];
+  if (isSunday(date)) return sundayOk(rules, state) ? clamp([toMin(rules!.sunday!.open, 12 * 60), toMin(rules!.sunday!.close, 19 * 60 + 30)]) : null;
+  return clamp([toMin(rules?.weekday?.open, OPEN), toMin(rules?.weekday?.close, CLOSE)]);
 }
 
 function nth(year: number, month: number, weekday: number, n: number) { // nth weekday of month (n = -1: last)

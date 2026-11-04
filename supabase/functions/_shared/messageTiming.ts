@@ -15,4 +15,11 @@ export function replyDelaySeconds(inbound: string, reply: string, opts: { quick?
   return Math.round(Math.max(25, Math.min(150, total)));
 }
 
+/**
+ * The longest an in-request reply waits before sending. A delay beyond this is written to the draft's
+ * send_after and the sequence worker (which runs every minute per agent) delivers it, so no isolate
+ * is held open for two and a half minutes per inbound text.
+ */
+export const MAX_INLINE_WAIT_S = 45;
+
 export const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));

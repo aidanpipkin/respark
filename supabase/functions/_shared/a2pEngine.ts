@@ -258,6 +258,9 @@ export async function advanceRegistration(E: any, s: any, reg: any) {
       const acct = (await E.TwilioAccount.filter({ agent_email: s.agent_email }, { limit: 1 })).items[0];
       const svc = await tw(cred, `${MSG}/Services`, { FriendlyName: `${reg.legal_business_name || s.brand_name || 'Respark'} A2P`.slice(0, 64), UseInboundWebhookOnNumber: 'true', ...(acct?.webhook_url ? { StatusCallback: acct.webhook_url } : {}) });
       mg = svc.sid; update.messaging_service_sid = mg;
+      // Persist right away: if the campaign POST below fails, the next run reuses this service instead of orphaning it.
+      await E.A2PRegistration.update(reg.id, { messaging_service_sid: mg, last_checked_at: now() });
+      reg = { ...reg, messaging_service_sid: mg };
     }
     const samples = campaignSamples(reg);
     const campaign = await tw(cred, `${MSG}/Services/${mg}/Compliance/Usa2p`, {

@@ -5,7 +5,8 @@
 //
 // Environment (set in the Supabase dashboard → Edge Functions → Secrets):
 //   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_DB_URL   (injected by Supabase)
-//   APP_URL                 public web app origin, stands in for the x-base44-app-url header
+//   APP_URL                 public web app origin; always replaces the x-base44-app-url header when set (appOrigin())
+//   CORS_ORIGIN (optional)  comma-separated allow-list of browser origins; default `*`
 //   PLATFORM_OWNER_EMAIL    identity reported by auth.me() for service-role (cron) calls
 //   CRON_SECRET (optional)  overrides the Vault `cron_secret` that pg_cron sends as x-cron-secret; same identity as the service role
 //   RESEND_API_KEY, FROM_EMAIL                     SendEmail
@@ -36,38 +37,75 @@ export const secrets = {
 // ---------------------------------------------------------------------------
 // HTTP helpers
 // ---------------------------------------------------------------------------
-export const corsHeaders: Record<string, string> = {
-  'Access-Control-Allow-Origin': Deno.env.get('CORS_ORIGIN') || '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-base44-app-url',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-};
+// The legacy public origin (Base44 hosting). Only used when APP_URL is unset.
+const LEGACY_APP_ORIGIN = 'https://respark-pipkingroup.com';
 
-function withCors(res: Response): Response {
+/** Public web-app origin (APP_URL, no trailing slash) for links in texts, emails and redirects. */
+export function appOrigin(): string {
+  return (Deno.env.get('APP_URL') || LEGACY_APP_ORIGIN).replace(/\/+$/, '');
+}
+
+/**
+ * The caller's address for rate limiting: cf-connecting-ip when a proxy sets it, otherwise the LAST
+ * x-forwarded-for hop (the one appended by the edge in front of us; earlier hops are caller-supplied).
+ */
+export function clientIp(req: Request): string {
+  const cf = (req.headers.get('cf-connecting-ip') || '').trim();
+  if (cf) return cf.slice(0, 64);
+  const hops = (req.headers.get('x-forwarded-for') || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return (hops[hops.length - 1] || 'unknown').slice(0, 64);
+}
+
+// CORS_ORIGIN: comma-separated allow-list of origins, or `*` (the default for now). With a list, the
+// request's Origin is echoed back when it is on the list; otherwise the first listed origin is sent,
+// which makes the browser refuse the response.
+const corsOrigins = (): string[] => (Deno.env.get('CORS_ORIGIN') || '*').split(',').map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean);
+const CORS_ALLOW_HEADERS = 'authorization, x-client-info, apikey, content-type';
+const CORS_ALLOW_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
+
+/** CORS headers for one request (origin matched against CORS_ORIGIN). */
+export function corsHeadersFor(req?: Request): Record<string, string> {
+  const list = corsOrigins();
+  let origin = list[0] || '*';
+  if (!list.includes('*')) {
+    const sent = (req?.headers.get('origin') || '').replace(/\/+$/, '');
+    if (sent && list.includes(sent)) origin = sent;
+  } else origin = '*';
+  const out: Record<string, string> = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': CORS_ALLOW_HEADERS, 'Access-Control-Allow-Methods': CORS_ALLOW_METHODS };
+  if (origin !== '*') out.Vary = 'Origin';
+  return out;
+}
+
+/** Default CORS headers (no request to match against); prefer corsHeadersFor(req). */
+export const corsHeaders: Record<string, string> = corsHeadersFor();
+
+function withCors(res: Response, req?: Request): Response {
   const headers = new Headers(res.headers);
-  for (const [k, v] of Object.entries(corsHeaders)) headers.set(k, v);
+  for (const [k, v] of Object.entries(corsHeadersFor(req))) headers.set(k, v);
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
 /**
  * Serves a legacy `export default async function (req)` handler as a Supabase edge function:
  * answers CORS preflight, adds CORS headers, and supplies the x-base44-app-url header the legacy
- * code reads (from APP_URL) when the caller did not send one.
+ * code reads. When APP_URL is set it always replaces whatever the caller sent (the header is never
+ * trusted from outside); without APP_URL the caller's value is left alone (local development).
  */
 export function serve(handler: (req: Request) => Promise<Response> | Response): void {
   Deno.serve(async (req) => {
-    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeadersFor(req) });
     let request = req;
     const appUrl = Deno.env.get('APP_URL');
-    if (appUrl && !req.headers.get('x-base44-app-url')) {
+    if (appUrl) {
       const headers = new Headers(req.headers);
       headers.set('x-base44-app-url', appUrl);
       request = new Request(req, { headers });
     }
     try {
-      return withCors(await handler(request));
+      return withCors(await handler(request), req);
     } catch (e) {
       console.error('[serve]', (e as Error)?.stack || e);
-      return withCors(Response.json({ error: 'Internal error' }, { status: 500 }));
+      return withCors(Response.json({ error: 'Internal error' }, { status: 500 }), req);
     }
   });
 }
@@ -111,11 +149,24 @@ async function cronSecretValue(): Promise<string> {
   } catch { return ''; }
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
+/** Constant-time string comparison (length is compared first, which leaks only the length). */
+export function timingSafeEqual(a: string, b: string): boolean {
+  const x = String(a ?? ''), y = String(b ?? '');
+  if (x.length !== y.length) return false;
   let out = 0;
-  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  for (let i = 0; i < x.length; i++) out |= x.charCodeAt(i) ^ y.charCodeAt(i);
   return out === 0;
 }
+
+export async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Verified user tokens are remembered per isolate for a minute: a screen load fans out into several
+// function calls with the same JWT, and each one otherwise costs an auth round trip plus a profile read.
+const USER_CACHE_MS = 60 * 1000;
+const userCache = new Map<string, { user: User | null; at: number }>();
 
 async function resolveUser(req: Request): Promise<User | null> {
   // pg_cron / Postgres triggers identify themselves with a shared secret (Vault `cron_secret` = env `CRON_SECRET`)
@@ -123,13 +174,16 @@ async function resolveUser(req: Request): Promise<User | null> {
   const sent = req.headers.get('x-cron-secret') || '';
   if (sent) {
     const cronSecret = await cronSecretValue();
-    if (cronSecret && sent.length === cronSecret.length && timingSafeEqual(sent, cronSecret)) return SYSTEM_USER();
+    if (cronSecret && timingSafeEqual(sent, cronSecret)) return SYSTEM_USER();
   }
   const token = bearer(req);
   if (!token) return null;
   // Cron (pg_cron / scheduled functions) and function-to-function calls send the service role key.
   // Base44 ran workflows as the app owner, so they land in the code's admin paths.
-  if (token === env('SUPABASE_SERVICE_ROLE_KEY')) return SYSTEM_USER();
+  if (timingSafeEqual(token, env('SUPABASE_SERVICE_ROLE_KEY'))) return SYSTEM_USER();
+  const cacheKey = await sha256Hex(token);
+  const hit = userCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < USER_CACHE_MS) return hit.user;
   const anon = createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), { auth: { persistSession: false, autoRefreshToken: false } });
   const { data, error } = await anon.auth.getUser(token);
   if (error || !data?.user) return null;
@@ -139,8 +193,14 @@ async function resolveUser(req: Request): Promise<User | null> {
   const profile = rows[0] as { email?: string; full_name?: string; role?: string } | undefined;
   const role = (profile?.role === 'admin' ? 'admin' : profile?.role === 'user' ? 'user' : 'agent') as User['role'];
   const meta = (u.user_metadata ?? {}) as Record<string, string>;
-  return { id: u.id, email: String(u.email || profile?.email || '').toLowerCase(), full_name: profile?.full_name || meta.full_name || meta.name || '', role, roles: [role] };
+  const user: User = { id: u.id, email: String(u.email || profile?.email || '').toLowerCase(), full_name: profile?.full_name || meta.full_name || meta.name || '', role, roles: [role] };
+  if (userCache.size > 5000) userCache.clear();
+  userCache.set(cacheKey, { user, at: Date.now() });
+  return user;
 }
+
+/** Drops the in-isolate user cache (tests, or right after a role change). */
+export function forgetUsers(): void { userCache.clear(); }
 
 // ---------------------------------------------------------------------------
 // Integrations
@@ -178,16 +238,38 @@ export async function sendEmail(args: SendEmailArgs): Promise<{ success: boolean
   } else {
     text = args.body || '';
   }
-  const from = args.from_name ? `${String(args.from_name).replace(/[<>"]/g, '')} <${fromEmail}>` : fromEmail;
-  const r = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: Array.isArray(args.to) ? args.to : [args.to], subject: subject.slice(0, 998), ...(html ? { html } : { text }), ...(args.reply_to ? { reply_to: args.reply_to } : {}) }),
-    signal: AbortSignal.timeout(20000),
-  });
-  const out = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(`SendEmail failed (${r.status}): ${out?.message || out?.name || 'unknown error'}`), { status: r.status });
-  return { success: true, id: out?.id };
+  const from = fromAddress(fromEmail, args.from_name);
+  const payload = JSON.stringify({ from, to: Array.isArray(args.to) ? args.to : [args.to], subject: subject.slice(0, 998), ...(html ? { html } : { text }), ...(args.reply_to ? { reply_to: args.reply_to } : {}) });
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: payload,
+      signal: AbortSignal.timeout(20000),
+    });
+    const out = await r.json().catch(() => ({}));
+    if (r.status === 429 && attempt === 0) {
+      // Resend rate limit: one retry, honouring Retry-After up to 2 s.
+      const after = Number(r.headers.get('retry-after')) * 1000;
+      await new Promise((res) => setTimeout(res, Math.min(2000, after > 0 ? after : 1000)));
+      continue;
+    }
+    if (!r.ok) throw Object.assign(new Error(`SendEmail failed (${r.status}): ${out?.message || out?.name || 'unknown error'}`), { status: r.status });
+    return { success: true, id: out?.id };
+  }
+}
+
+/**
+ * The Resend `from` field. FROM_EMAIL may be a bare address or already carry a display name
+ * ("LeadRespark <hello@x.com>"); a from_name replaces that display name instead of wrapping it twice.
+ */
+export function fromAddress(fromEmail: string, fromName?: string): string {
+  const raw = String(fromEmail || '').trim();
+  const m = /^(?:"?([^"<]*?)"?\s*)?<\s*([^<>\s]+@[^<>\s]+)\s*>$/.exec(raw);
+  const address = m ? m[2] : raw;
+  const existing = m ? m[1].trim() : '';
+  const name = String(fromName || existing || '').replace(/[<>"\r\n]/g, '').trim();
+  return name ? `${name} <${address}>` : address;
 }
 
 export type InvokeLLMArgs = { prompt: string; response_json_schema?: Record<string, unknown>; model?: string; system?: string; max_tokens?: number; temperature?: number };
@@ -195,7 +277,7 @@ export type InvokeLLMArgs = { prompt: string; response_json_schema?: Record<stri
 /** Base44 Core.InvokeLLM on the Anthropic Messages API. With a schema the answer comes back as an object via tool use. */
 export async function invokeLLM(args: InvokeLLMArgs): Promise<unknown> {
   const apiKey = env('ANTHROPIC_API_KEY');
-  const model = args.model || Deno.env.get('LLM_MODEL') || 'claude-sonnet-4-5';
+  const model = args.model || Deno.env.get('LLM_MODEL') || 'claude-sonnet-5-5';
   const structured = !!args.response_json_schema;
   const body: Record<string, unknown> = { model, max_tokens: args.max_tokens || 1200, messages: [{ role: 'user', content: args.prompt }] };
   if (args.temperature !== undefined) body.temperature = args.temperature;
@@ -277,7 +359,7 @@ export async function invokeFunction(name: string, body: unknown = {}, headers: 
     method: 'POST',
     headers: { Authorization: `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json', ...(Deno.env.get('APP_URL') ? { 'x-base44-app-url': Deno.env.get('APP_URL')! } : {}), ...headers },
     body: JSON.stringify(body ?? {}),
-    signal: AbortSignal.timeout(Number(Deno.env.get('FUNCTION_INVOKE_TIMEOUT_MS')) || 150000),
+    signal: AbortSignal.timeout(Number(Deno.env.get('FUNCTION_INVOKE_TIMEOUT_MS')) || 120000),
   });
   const text = await r.text();
   let data: unknown = text;
@@ -336,7 +418,8 @@ export function createClientFromRequest(req: Request): Base44Client {
     functions: { invoke: invokeFunction },
     users: {
       async inviteUser(email: string, role = 'agent') {
-        const { error } = await supabaseAdmin().auth.admin.inviteUserByEmail(email, { data: { role }, redirectTo: Deno.env.get('APP_URL') ? `${Deno.env.get('APP_URL')}/` : undefined });
+        // The invite link lands on the reset-password page, which makes an invited session choose a password.
+        const { error } = await supabaseAdmin().auth.admin.inviteUserByEmail(email, { data: { role }, redirectTo: Deno.env.get('APP_URL') ? `${appOrigin()}/reset-password` : undefined });
         if (error) throw new Error(`inviteUser failed: ${error.message}`);
         return { success: true };
       },

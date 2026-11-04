@@ -74,6 +74,21 @@ async function checkAI(base44: any) {
 const SMS_COST = 0.0125;
 const BALANCE_TTL = 2 * HOUR;
 
+const SENDS_TTL = HOUR;
+/**
+ * Outbound texts in the last 7 days, platform-wide. The count walks a week of message_log, so it is
+ * refreshed at most once an hour (cached in EngineCursor `sends_7d`); the funding estimate tolerates that.
+ */
+async function sends7d(E: any): Promise<number> {
+  const row = (await E.EngineCursor.filter({ key: 'sends_7d' }, { limit: 1 })).items[0];
+  let cached: { at?: string; sent?: number } = {};
+  try { cached = JSON.parse(row?.cursor || '{}'); } catch { /* recount */ }
+  if (cached.at && typeof cached.sent === 'number' && Date.now() - Date.parse(cached.at) < SENDS_TTL) return cached.sent;
+  const sent = Number(await E.MessageLog.count({ event_type: 'sms_sent', occurred_at: { $gte: ago(7 * DAY) }, agent_email: { $ne: 'rehearsal@leadrespark.internal' } }).catch(() => 0)) || 0;
+  await E.EngineCursor.upsert([{ key: 'sends_7d', cursor: JSON.stringify({ at: new Date().toISOString(), sent }) }], { key: 'key' }).catch(() => {});
+  return sent;
+}
+
 /**
  * Platform funding: the master Twilio balance versus what the last 7 days of texting cost. The balance is
  * fetched at most every 2 hours (cached in EngineCursor); the owner hears about it before texts stop.
@@ -91,7 +106,7 @@ async function checkFunding(base44: any) {
   }
   const balance = Number(cached.balance);
   if (!Number.isFinite(balance)) return;
-  const sent = await E.MessageLog.count({ event_type: 'sms_sent', occurred_at: { $gte: ago(7 * DAY) }, agent_email: { $ne: 'rehearsal@leadrespark.internal' } }).catch(() => 0);
+  const sent = await sends7d(E);
   const weekly = Number(sent || 0) * SMS_COST, daily = weekly / 7;
   const daysLeft = daily > 0 ? balance / daily : Infinity;
   const key = 'twilio_balance_low';

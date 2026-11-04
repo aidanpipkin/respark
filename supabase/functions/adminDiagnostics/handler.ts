@@ -1,4 +1,5 @@
 // Admin: read-only end-to-end health check for one agent's workspace (nothing is sent or changed).
+import { appOrigin } from '../_shared/runtime.ts';
 import { adminContext } from '../_shared/agentAccess.ts';
 import { agentSettings, ghl, failure } from '../_shared/ghl.ts';
 import { routeFor } from '../_shared/smsTransport.ts';
@@ -40,18 +41,18 @@ export default async function (req: Request) {
       return Response.json({ updated });
     }
     if (input.action === 'resend_a2p_ready') {
-      const { emailAgent } = await import('../../shared/agentNotify.ts');
-      const { agentSettings: settingsFor } = await import('../../shared/ghl.ts');
+      const { emailAgent } = await import('../_shared/agentNotify.ts');
+      const { agentSettings: settingsFor } = await import('../_shared/ghl.ts');
       const t = await settingsFor(base44, String(input.agent_email || '').toLowerCase().trim());
       if (!t) throw new Error('No agent with that email.');
-      const link = 'https://respark-pipkingroup.com/setup/texting-registration';
+      const link = `${appOrigin()}/setup/texting-registration`;
       const r = await emailAgent(base44, t, 'Finish your texting registration (30 seconds)', `Hi ${t.first_name || 'there'},\n\nTexting registration is open. Everything you entered is saved. Open the link below, re-enter your EIN (we never store it) and press Submit.\n\n${link}\n\nCarrier approval usually takes a few business days after that, and we track it for you.\n\nLeadRespark`);
       return Response.json({ result: r });
     }
     if (input.action === 'test_a2p_notice') {
       // Dry run of what an agent receives at each registration stage. Emails the OWNER a copy; never contacts the agent.
-      const { stageFor, noticeFor } = await import('../../shared/a2pNotify.ts');
-      const { agentSettings: settingsFor } = await import('../../shared/ghl.ts');
+      const { stageFor, noticeFor } = await import('../_shared/a2pNotify.ts');
+      const { agentSettings: settingsFor } = await import('../_shared/ghl.ts');
       const t = await settingsFor(base44, String(input.agent_email || '').toLowerCase().trim());
       if (!t) throw new Error('No agent with that email.');
       const reg = (await base44.asServiceRole.entities.A2PRegistration.filter({ agent_email: t.agent_email }, { limit: 1 })).items[0] || { id: 'x' };
@@ -68,12 +69,12 @@ export default async function (req: Request) {
         try { await base44.asServiceRole.integrations.Core.SendEmail({ to: config.owner_email, subject: `[TEST copy for ${t.agent_email}] ${n.subject}`, body: `This is exactly what ${t.agent_email} will receive by email when texting is approved:\n\n----\n${n.email}\n----\n\nText to ${t.alert_mobile || t.business_phone || 'their mobile'}:\n${n.text}`, from_name: 'LeadRespark' }); emailed = 'sent'; }
         catch (e) { emailed = `failed:${(e as Error).message}`; }
       }
-      const to = (await import('../../shared/agentNotify.ts')).agentEmail(t);
+      const to = (await import('../_shared/agentNotify.ts')).agentEmail(t);
       return Response.json({ transitions, email_to: to, text_to_last4: String(t.alert_mobile || t.notification_phone || t.business_phone || '').slice(-4), notice: n, owner_copy: emailed });
     }
     if (input.action === 'install_playbook') {
-      const { installPlaybook } = await import('../../shared/playbooks.ts');
-      const { agentSettings: settingsFor } = await import('../../shared/ghl.ts');
+      const { installPlaybook } = await import('../_shared/playbooks.ts');
+      const { agentSettings: settingsFor } = await import('../_shared/ghl.ts');
       const t = await settingsFor(base44, String(input.agent_email || '').toLowerCase().trim());
       if (!t) throw new Error('No agent with that email.');
       const c = await installPlaybook(base44.asServiceRole.entities, t, String(input.key || 'life_respark'));
@@ -83,8 +84,8 @@ export default async function (req: Request) {
     if (input.action === 'sync_playbook_prompts') {
       // Pushes the latest playbook prompts into every agent's copy (the old copy is saved as a version first).
       const E = base44.asServiceRole.entities;
-      const life = await import('../../shared/lifeSeed.ts');
-      const trucker = await import('../../shared/truckerSeed.ts');
+      const life = await import('../_shared/lifeSeed.ts');
+      const trucker = await import('../_shared/truckerSeed.ts');
       let updated = 0;
       for (const [name, sd] of [[life.CAMPAIGN_NAME, life], ['Trucker IUL Respark', trucker]] as any) {
         const page = await E.Campaign.filter({ name }, { limit: 200 });
@@ -100,7 +101,7 @@ export default async function (req: Request) {
     }
     if (input.action === 'a2p_inspect') {
       // Everything Twilio knows about an agent's registration: brand, campaign (with the reviewers' error list), messaging service, numbers.
-      const { tw, subCred, MSG, API } = await import('../../shared/twilio.ts');
+      const { tw, subCred, MSG, API } = await import('../_shared/twilio.ts');
       const E = base44.asServiceRole.entities;
       const reg = (await E.A2PRegistration.filter({ agent_email: String(input.agent_email || '').toLowerCase().trim() }, { limit: 1 })).items[0];
       if (!reg?.twilio_subaccount_sid) throw new Error('No Twilio registration for that agent.');
@@ -114,9 +115,9 @@ export default async function (req: Request) {
       return Response.json(out);
     }
     if (input.action === 'calendar_check') {
-      const { agentSettings: settingsFor } = await import('../../shared/ghl.ts');
-      const { freeSlots, spreadSlots } = await import('../../shared/messageBooking.ts');
-      const { labelSlot } = await import('../../shared/messageClock.ts');
+      const { agentSettings: settingsFor } = await import('../_shared/ghl.ts');
+      const { freeSlots, spreadSlots } = await import('../_shared/messageBooking.ts');
+      const { labelSlot } = await import('../_shared/messageClock.ts');
       const t = await settingsFor(base44, String(input.agent_email || '').toLowerCase().trim());
       if (!t) throw new Error('No agent with that email.');
       const tz = t.home_timezone || 'America/Chicago';
@@ -160,7 +161,7 @@ export default async function (req: Request) {
       const lead = { id: 'sample', first_name: s.first_name || 'there', phone: s.alert_mobile || '', timezone: s.home_timezone || 'America/Chicago' };
       const docs = documentsFor(config, campaign);
       const p = { lead_recap: 'This is a sample of the email your leads get the moment they book. In real emails this paragraph recaps what they shared in the texts.', call_focus: 'keeping your family covered while you are on the road', agent_brief: [], suggested_opener: '' };
-      const mail = leadEmail(appt, s, lead, docs, p, 'https://respark-pipkingroup.com');
+      const mail = leadEmail(appt, s, lead, docs, p, appOrigin());
       let status = '';
       try { const r = await ghlRaw(s, '/conversations/messages', 'POST', { type: 'Email', contactId: up.contact?.id, subject: `[Sample] ${mail.subject}`, html: mail.html, attachments: docs.map((d: any) => d.url) }); status = `sent ${JSON.stringify(r).slice(0, 200)}`; }
       catch (e) { try { const r2 = await ghlRaw(s, '/conversations/messages', 'POST', { type: 'Email', contactId: up.contact?.id, subject: `[Sample] ${mail.subject}`, html: mail.html }); status = `sent without attachments (${(e as Error).message}) ${JSON.stringify(r2).slice(0, 150)}`; } catch (e2) { status = `failed: ${(e2 as Error).message}`; } }

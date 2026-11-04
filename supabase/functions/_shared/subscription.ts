@@ -66,7 +66,7 @@ export async function syncSubscription(E: any, a: any, known?: any) {
 }
 
 /** Starts the subscription on the saved card. Returns { status, client_secret? } (client_secret when the bank needs approval). */
-export async function subscribe(E: any, s: any, code: string, nonce: string) {
+export async function subscribe(E: any, s: any, code: string) {
   const config = await platformConfig(E);
   let a = await billingAccount(E, s.agent_email);
   if (!a?.stripe_customer_id || !a.payment_method_id || a.status !== 'card_saved') throw new Error('Save your card first.');
@@ -81,7 +81,7 @@ export async function subscribe(E: any, s: any, code: string, nonce: string) {
     customer: a.stripe_customer_id, 'items[0][price]': price, default_payment_method: a.payment_method_id,
     payment_behavior: 'allow_incomplete', 'expand[0]': 'latest_invoice.payment_intent',
     'metadata[agent_email]': s.agent_email, ...(promo ? { 'discounts[0][promotion_code]': promo.id } : {}),
-  }, `subscribe:${a.id}:${nonce}`);
+  }, `subscribe:${a.id}:${a.subscription_id || 'first'}`); // server-side key: a double click or two tabs cannot open two subscriptions
   await E.BillingAccount.update(a.id, { subscription_id: sub.id, subscription_consent_at: new Date().toISOString() });
   a = await syncSubscription(E, { ...a, subscription_id: sub.id });
   const pi = sub.latest_invoice?.payment_intent;

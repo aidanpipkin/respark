@@ -46,7 +46,9 @@ serve(async (req: Request) => {
   const sent = req.headers.get('x-import-token') || '';
   const rows0 = await sql`select decrypted_secret from vault.decrypted_secrets where name = 'import_token' limit 1`;
   const expected = String((rows0[0] as { decrypted_secret?: string } | undefined)?.decrypted_secret || '');
-  if (!expected || !sent || !timingSafeEqual(sent, expected)) return json({ error: 'Not allowed.' }, 403);
+  // No `import_token` in Vault means the migration endpoint is switched off: it does not exist as far as callers can tell.
+  if (!expected) return json({ error: 'Not found' }, 404);
+  if (!sent || !timingSafeEqual(sent, expected)) return json({ error: 'Not allowed.' }, 403);
 
   let body: { entity?: string; rows?: Record<string, unknown>[] } = {};
   try { body = await req.json(); } catch { return json({ error: 'Bad JSON' }, 400); }

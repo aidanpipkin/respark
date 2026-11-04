@@ -84,7 +84,7 @@ Deno.test('InvokeLLM uses tool use for schemas, returns text otherwise, retries 
     deepStrictEqual((m.calls[0].init.headers as Record<string, string>)['x-api-key'], 'sk-ant-test');
     deepStrictEqual(req.tool_choice, { type: 'tool', name: 'respond' });
     deepStrictEqual((req.tools as Array<{ input_schema: { type: string } }>)[0].input_schema.type, 'object');
-    deepStrictEqual(req.model, 'claude-sonnet-4-5');
+    deepStrictEqual(req.model, 'claude-sonnet-5-5');
     deepStrictEqual(await invokeLLM({ prompt: 'say', model: 'claude-x' }), 'plain answer');
     deepStrictEqual((m.calls[1].body as { model: string }).model, 'claude-x');
   } finally { m.restore(); }

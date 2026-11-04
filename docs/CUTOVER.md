@@ -6,7 +6,7 @@ State on 2026-11-03 evening (all done from the Claude session):
 - Vercel project `respark` (team `aidan-1924`, root `web`, framework vite): https://respark-aidan-1924.vercel.app, env `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`.
 - Owner login `pipkinaidan@outlook.com` exists and is `admin` (profile created by the auth trigger; email confirmed by hand because the default mailer sends a link, not the 6-digit code the app asks for).
 - First full data copy done through `exportToSupabase` (Base44 workflow "Migration: push data to Supabase") → `importRows`: 5,439 leads, 10,426 message log rows, 5,011 conversations, 5,093 dispatches, 4 workspaces, 3 A2P registrations, 2 numbers, 3 billing accounts, 6 campaigns / 206 steps. The empty workspace auto-created by the first dashboard load was retired (`retired-2f47fb43@leadrespark.internal`).
-- pg_cron jobs are defined but **unscheduled** until cutover (Base44 is still the live engine).
+- pg_cron jobs are defined but **unscheduled** until cutover (Base44 is still the live engine). The engine schedule is now per-minute pg-side fan-out (`respark_sequence_sender` → `public.sequence_fanout()`), plus `respark_sequence_housekeeping` (every 5 min) and `respark_pgnet_gc` (hourly), defined in `20261104180100_sequence_fanout_cron.sql`; that migration also re-parks every `respark_%` job at its end.
 
 ## Before cutover (owner)
 
@@ -23,7 +23,7 @@ State on 2026-11-03 evening (all done from the Claude session):
    - Stripe: new endpoint `…/functions/v1/stripeWebhook` (events: customer.subscription.*, invoice.*, payment_intent.*, setup_intent.*), paste its signing secret as `STRIPE_WEBHOOK_SECRET`.
    - GHL marketplace app: redirect URI `…/functions/v1/ghlOAuth`; custom automations → `…/functions/v1/ghlWebhook?secret=<RESPARK_WEBHOOK_SECRET>`.
    - Lead vendors (Closr/GOAT) → the URLs `leadWebhookSettings` shows per agent.
-4. Schedule the crons: run the `cron.schedule(...)` block from `supabase/migrations/20261103234618_cron_and_triggers.sql`.
+4. Schedule the crons: run the `cron.schedule(...)` block from `supabase/migrations/20261103234618_cron_and_triggers.sql` **except** the `respark_sequence_sender` line, then the three `cron.schedule(...)` lines from `supabase/migrations/20261104180100_sequence_fanout_cron.sql` (per-minute `sequence_fanout`, housekeeping, pg_net GC). Before that, check `message_log` for duplicate inbound sids (query in the comment above `message_log_inbound_sid_uniq` in `20261104180000_scale_fixes.sql`).
 5. Domain: add `respark-pipkingroup.com` to the Vercel project, update DNS at the registrar (A/CNAME as Vercel shows), set `APP_URL` and Auth site URL to the domain, update the Vercel env if needed.
 6. Base44: pause every workflow in LeadRespark (A2P tracker last, after confirming `a2pAdvance` ran once on Supabase), then unpublish.
 7. Delete the Vault `import_token` and archive the migration workflow.

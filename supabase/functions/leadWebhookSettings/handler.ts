@@ -2,7 +2,7 @@
 import { setupContext } from '../_shared/setupAccess.ts';
 import { appOrigin } from '../_shared/agentSite.ts';
 import { failure } from '../_shared/ghl.ts';
-import { functionUrl } from '../_shared/runtime.ts';
+import { functionUrl, appOrigin as configuredOrigin } from '../_shared/runtime.ts';
 import { VENDORS, VENDOR_LABEL } from '../_shared/vendorLeads.ts';
 
 const newKey = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
@@ -24,7 +24,7 @@ export default async function (req: Request) {
     try { origin = appOrigin(req) || ''; } catch { origin = ''; }
     // Base44 served the webhook under the app origin; on Supabase it lives at ${SUPABASE_URL}/functions/v1/leadWebhook.
     let endpoint = '';
-    try { endpoint = functionUrl('leadWebhook'); } catch { endpoint = `${origin || 'https://respark-pipkingroup.com'}/functions/leadWebhook`; }
+    try { endpoint = functionUrl('leadWebhook'); } catch { endpoint = `${origin || configuredOrigin()}/functions/leadWebhook`; }
     return Response.json({
       enabled: !!key,
       url: key ? `${endpoint}?key=${key}` : '',

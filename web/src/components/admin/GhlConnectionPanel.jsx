@@ -57,7 +57,7 @@ export default function GhlConnectionPanel() {
       <ol className="mt-4 list-decimal space-y-3 pl-5 text-xs leading-6">
         <li>Go to <a className="text-primary underline" href="https://marketplace.gohighlevel.com" target="_blank" rel="noreferrer">marketplace.gohighlevel.com</a>, sign in with your agency login, then <b>My Apps → Create App</b>. Name it LeadRespark, type <b>Private</b>, distribution <b>Agency and Sub-account</b>, and turn on installing to <b>all sub-accounts</b> if offered.</li>
         <li>In <b>Auth</b>, add every scope listed below, then add the redirect URL below.</li>
-        <li>Under <b>Client Keys</b>, create a key. Paste the <b>Client ID</b> here. Put the <b>Client secret</b> in the app's Base44 secrets as <code>GHL_CLIENT_SECRET</code> (never here).</li>
+        <li>Under <b>Client Keys</b>, create a key. Paste the <b>Client ID</b> here. Put the <b>Client secret</b> in Supabase → Edge Functions → Secrets as <code>GHL_CLIENT_SECRET</code> (never here).</li>
         <li>In <b>Advanced Settings → Webhooks</b>, paste the webhook URL below and turn on InboundMessage, OutboundMessage, AppointmentCreate, AppointmentUpdate and AppointmentDelete.</li>
         <li>Copy the app's <b>Installation URL</b> from the Auth page, paste it below, save, then click <b>Connect GHL</b> and approve for your agency.</li>
       </ol>
@@ -82,7 +82,7 @@ export default function GhlConnectionPanel() {
 
     <div className="flex flex-wrap gap-2">
       <Button type="button" loading={busy === 'save'} disabled={!!busy} onClick={() => run('save')}>{busy === 'save' ? 'Saving' : 'Save'}</Button>
-      <Button type="button" variant="outline" disabled={!!busy || !data.settings.ghl_install_url || !st.client_secret_set} className="gap-1.5" onClick={() => { window.location.href = data.settings.ghl_install_url; }}><ExternalLink size={14} />{st.connected ? 'Reconnect GHL' : 'Connect GHL'}</Button>
+      <Button type="button" variant="outline" disabled={!!busy || !data.settings.ghl_install_url || !st.client_secret_set} className="gap-1.5" onClick={async () => { try { const r = await call('adminGhl', { action: 'install_url' }); if (!r?.install_url) throw new Error('No install URL'); window.location.href = r.install_url; } catch (e) { notify.err(e.message || 'Could not start the GHL connection.', 'Connect GHL'); } }}><ExternalLink size={14} />{st.connected ? 'Reconnect GHL' : 'Connect GHL'}</Button>
       <Button type="button" variant="outline" loading={busy === 'test'} disabled={!!busy || !st.connected} onClick={() => run('test')}>{busy === 'test' ? 'Testing' : 'Test connection'}</Button>
     </div>
   </section>;

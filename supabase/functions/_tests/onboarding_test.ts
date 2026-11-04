@@ -8,7 +8,7 @@
 //   a2pSubmit (brand_submitted) → a2pAdvance twice (campaign created, then approved) → launch send_test and
 //   the agent's YES through twilioWebhook turns the agent live → availability book + appointmentJourney
 //   emails → appointmentReminders sends the due reminders → stripeWebhook and inviteAgent.
-import { deepStrictEqual, ok } from 'node:assert/strict';
+import { deepStrictEqual, ok, match } from 'node:assert/strict';
 
 const SERVICE_KEY = 'service-role-test-key';
 const OWNER = 'owner@example.com';
@@ -51,6 +51,7 @@ import { ENTITIES } from '../_shared/schema.ts';
 import { functionUrl } from '../_shared/runtime.ts';
 import { stageNames } from '../_shared/dataModelSpec.ts';
 import ghlOAuth from '../ghlOAuth/handler.ts';
+import { signInstallState } from '../_shared/ghlAuth.ts';
 import workspace from '../workspace/handler.ts';
 import selfSetup from '../selfSetup/handler.ts';
 import getSetupStatus from '../getSetupStatus/handler.ts';
@@ -321,7 +322,13 @@ Deno.test({ name: 'self-serve onboarding end to end', sanitizeOps: false, saniti
   });
 
   await t.step('ghlOAuth callback stores the agency OAuth credential and redirects to the app', async () => {
-    const res = await ghlOAuth(new Request(`${functionUrl('ghlOAuth')}?code=auth-code-1`, { headers: { 'x-base44-app-url': APP_URL } }));
+    // The callback refuses a code that was not started from Admin > Platform (no / forged / expired state).
+    const noState = await ghlOAuth(new Request(`${functionUrl('ghlOAuth')}?code=auth-code-1`, { headers: { 'x-base44-app-url': APP_URL } }));
+    deepStrictEqual(noState.status, 302);
+    match(String(noState.headers.get('Location')), /ghl=error&message=.*not\+started\+from\+Admin/);
+    deepStrictEqual(calls.filter((c) => c.url === 'https://services.leadconnectorhq.com/oauth/token').length, 0, 'no code exchange without a valid state');
+    const state = await signInstallState(OWNER);
+    const res = await ghlOAuth(new Request(`${functionUrl('ghlOAuth')}?code=auth-code-1&state=${encodeURIComponent(state)}`, { headers: { 'x-base44-app-url': APP_URL } }));
     deepStrictEqual(res.status, 302);
     deepStrictEqual(res.headers.get('Location'), `${APP_URL}/admin/platform?ghl=connected&bulk=0`);
     const tokenCall = calls.find((c) => c.url === 'https://services.leadconnectorhq.com/oauth/token');
@@ -411,7 +418,7 @@ Deno.test({ name: 'self-serve onboarding end to end', sanitizeOps: false, saniti
     deepStrictEqual([a.subscription_id, a.subscription_status, a.status], ['sub_1', 'active', 'card_saved']);
     ok(a.subscription_consent_at && a.subscription_period_end);
     const sub = calls.find((c) => c.url === 'https://api.stripe.com/v1/subscriptions' && c.method === 'POST');
-    deepStrictEqual([sub?.form?.get('customer'), sub?.form?.get('items[0][price]'), sub?.form?.get('default_payment_method'), sub?.headers['idempotency-key']], ['cus_1', 'price_1', 'pm_1', `subscribe:${a.id}:nonce-12345678`]);
+    deepStrictEqual([sub?.form?.get('customer'), sub?.form?.get('items[0][price]'), sub?.form?.get('default_payment_method'), sub?.headers['idempotency-key']], ['cus_1', 'price_1', 'pm_1', `subscribe:${a.id}:first`], 'the idempotency key is server-derived (billing account + previous subscription), not the client nonce');
     const config = (await E.PlatformSettings.filter({ singleton_key: 'platform' }, { limit: 1 })).items[0];
     deepStrictEqual(config.stripe_price_id, 'price_1');
     // Still onboarding: no number, no registration.

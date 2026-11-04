@@ -2,6 +2,7 @@
 // A signal is recorded once per key (repeats just bump the count), shows up in the admin Command
 // Center, can surface to the agent as an in-app banner, and notifies people with cooldowns so
 // nobody gets spammed. Health checks, billing, setup nudges and help requests all use this.
+import { appOrigin } from './runtime.ts';
 import { textAgent, emailAgent } from './agentNotify.ts';
 import { platformConfig } from './credits.ts';
 
@@ -50,7 +51,7 @@ export async function raise(base44: any, sig: Signal) {
     const line = `${sig.agent_email ? `[${sig.agent_email}] ` : ''}${sig.title}${sig.detail ? `: ${String(sig.detail).slice(0, 300)}` : ''}`;
     // Email first and on its own, so a texting problem can never swallow the alert.
     let delivered = false;
-    const link = sig.action_href ? `https://respark-pipkingroup.com${sig.action_href}` : 'https://respark-pipkingroup.com/admin/command';
+    const link = sig.action_href ? `${appOrigin()}${sig.action_href}` : `${appOrigin()}/admin/command`;
     if (email) {
       try { await base44.asServiceRole.integrations.Core.SendEmail({ to: email, subject: `LeadRespark ${severity === 'critical' ? 'ALERT' : 'notice'}: ${sig.title}`.slice(0, 180), body: `${line}\n\n${sig.action_label || 'Open'}: ${link}`, from_name: 'LeadRespark' }); delivered = true; }
       catch (e) { console.error('[signals] owner email failed', (e as Error).message); }

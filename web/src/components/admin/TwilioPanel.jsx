@@ -41,7 +41,7 @@ export default function TwilioPanel() {
       </div>
 
       <ol className="space-y-3">
-        <Row ok={st.credentials} label="1. Add TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in Base44 Secrets" detail="From your Twilio Console home page (main account, not a subaccount)." />
+        <Row ok={st.credentials} label="1. Add TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in Supabase → Edge Functions → Secrets" detail="From your Twilio Console home page (main account, not a subaccount)." />
         <Row ok={st.account?.status === 'active' && st.account?.type !== 'Trial'} label="2. Upgraded Twilio account" detail={st.account ? `${st.account.name}: ${st.account.status}, ${st.account.type}` : 'Trial accounts cannot register A2P.'} />
         <Row ok={st.primary_profile?.status === 'twilio-approved'} label="3. Approved ISV Primary Customer Profile" detail={st.primary_profile ? `${st.primary_profile.name}: ${st.primary_profile.status}` : 'Twilio Console → Trust Hub → Customer Profiles → create a Primary profile for your company with business identity "ISV Reseller or Partner". Paste its BU… SID below.'} />
         {st.primary_profile && <Row ok={!st.isv_blocked?.length} label="4. Agent subaccounts can register under it (ISV/Reseller)" detail={st.isv_blocked?.length ? `Blocked for ${st.isv_blocked.join(', ')}. Open a Twilio Support ticket: "Please change the classification of our Primary Customer Profile ${form.twilio_primary_profile_sid || ''} from Direct Customer to ISV/Reseller. Secondary profiles in our subaccounts fail evaluation with errors 22216/22217." When Twilio confirms, those agents press Submit again.` : 'No blocked registrations. If an agent submission ever fails with 22216/22217, this turns red with the fix.'} />}

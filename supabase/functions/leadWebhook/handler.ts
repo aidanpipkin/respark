@@ -5,9 +5,8 @@
 // (leadWebhookSettings returns the exact URLs). Each lead becomes a contact, is enrolled in the agent's
 // chosen campaign and, with documented consent, gets the opening text right away. Vendor payloads are
 // mapped onto the generic fields by _shared/vendorLeads.ts.
-import { createClientFromRequest } from '../_shared/runtime.ts';
+import { createClientFromRequest, waitUntil, clientIp } from '../_shared/runtime.ts';
 import { resilient } from '../_shared/entityRetry.ts';
-import { waitUntil } from '../_shared/runtime.ts';
 import { ghl, scope, agentSettings } from '../_shared/ghl.ts';
 import { e164 } from '../_shared/smsTransport.ts';
 import { businessName } from '../_shared/publicSite.ts';
@@ -122,7 +121,7 @@ export default async function (req: Request) {
     if (lead.consented && result.lead_id && ['imported', 'held'].includes(result.status)) {
       await writeConsentRecords(E, [consentRecordFor(s, result, intake, {
         basis: 'webhook', attested_by: vendor ? `vendor:${vendor}:${key.slice(0, 8)}` : `webhook:${key.slice(0, 8)}`, attested_at: receivedAt, location_id: s.location_id || '',
-        ip: clean(lead.consent_ip, 60) || (req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || '').split(',')[0].trim().slice(0, 64),
+        ip: clean(lead.consent_ip, 60) || (clientIp(req) === 'unknown' ? '' : clientIp(req)),
         user_agent: (req.headers.get('user-agent') || '').slice(0, 200), page_url: clean(lead.consent_url, 300),
       })]);
     }
@@ -133,6 +132,11 @@ export default async function (req: Request) {
     }
     return Response.json({ ok: true, status: result.status, reason: (result as any).reason || '', lead_id: result.lead_id || null, ...(vendor ? { vendor } : {}) });
   } catch (error) {
-    return Response.json({ error: String((error as Error).message || 'Could not accept the lead.').slice(0, 200) }, { status: 400 });
+    // Known validation problems (EntityError and friends carry a 4xx status) are told to the sender; anything else
+    // is logged and answered generically so internal details never reach a vendor.
+    const status = Number((error as { status?: number })?.status) || 0;
+    if (status >= 400 && status < 500) return Response.json({ error: String((error as Error).message || 'Could not accept the lead.').slice(0, 200) }, { status });
+    console.error('[leadWebhook]', (error as Error)?.stack || error);
+    return Response.json({ error: 'Could not accept the lead. Try again later.' }, { status: 500 });
   }
 }

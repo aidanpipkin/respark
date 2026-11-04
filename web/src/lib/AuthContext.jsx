@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 
 const AuthContext = createContext();
@@ -12,8 +12,31 @@ export const AuthProvider = ({ children }) => {
   const [authChecked, setAuthChecked] = useState(false);
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
 
+  const userRef = useRef(null);
+  userRef.current = user;
+  const signingOut = useRef(false); // an explicit logout redirects itself; the listener must not add a returnTo
+
   useEffect(() => {
     checkAppState();
+  }, []);
+
+  // Keep React state in step with the Supabase session: an expired or revoked token (SIGNED_OUT, or a
+  // TOKEN_REFRESHED without a session) clears the user and asks for sign-in; a sign-in from another tab
+  // or an OAuth redirect loads the user.
+  useEffect(() => {
+    const { data } = base44.supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+        setUser(null);
+        setIsAuthenticated(false);
+        setIsLoadingAuth(false);
+        setAuthChecked(true);
+        if (!signingOut.current) setAuthError({ type: 'auth_required', message: 'Your session has ended. Sign in again to continue.' });
+      } else if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session && !userRef.current) {
+        setAuthError(null);
+        checkUserAuth();
+      }
+    });
+    return () => data?.subscription?.unsubscribe();
   }, []);
 
   const checkAppState = async () => {
@@ -102,6 +125,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = (shouldRedirect = true) => {
+    signingOut.current = true;
     setUser(null);
     setIsAuthenticated(false);
     

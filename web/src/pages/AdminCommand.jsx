@@ -112,7 +112,7 @@ export default function AdminCommand() {
               <div className="mt-3 grid grid-cols-3 gap-3 text-center">
                 <div><p className="text-xl font-semibold tabular-nums">{data.ai.own_today}</p><p className="text-[11px] text-muted-foreground">On your key</p></div>
                 <div><p className="text-xl font-semibold tabular-nums" style={{ color: data.ai.fallback_today ? stageColors('needs_you').ink : undefined }}>{data.ai.fallback_today}</p><p className="text-[11px] text-muted-foreground">Fell back</p></div>
-                <div><p className="text-xl font-semibold tabular-nums">{data.ai.base44_today}</p><p className="text-[11px] text-muted-foreground">Base44 credits</p></div>
+                <div><p className="text-xl font-semibold tabular-nums">{data.ai.base44_today}</p><p className="text-[11px] text-muted-foreground">Legacy credits</p></div>
               </div>
             </section>
             <RehearsalCard last={data.rehearsal} onChange={refetch} />

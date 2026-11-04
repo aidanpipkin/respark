@@ -3,7 +3,7 @@
 //                           { action: 'start' }       → { url }  open it; Microsoft sends the browser back here
 //                           { action: 'disconnect' }  → { connected: false }
 //   GET  ?code=&state=      Microsoft's redirect (no sign-in header): stores the refresh token and sends the
-//                           browser to ${APP_URL}/availability?ms=connected|error
+//                           browser to ${APP_URL}/setup/calendar?ms=connected|error
 // Register functionUrl('msOAuth') as the app registration's redirect URI. Deploy with --no-verify-jwt (the
 // callback carries no user token; the state parameter is HMAC-signed with MS_CLIENT_SECRET instead).
 import { createClientFromRequest, functionUrl } from '../_shared/runtime.ts';
@@ -15,7 +15,8 @@ function appOrigin(req: Request) {
   const header = req.headers.get('x-base44-app-url') || Deno.env.get('APP_URL') || '';
   return /^https?:\/\//.test(header) ? new URL(header).origin : new URL(req.url).origin;
 }
-const back = (origin: string, params: Record<string, string>) => { const u = new URL('/availability', origin); for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v); return Response.redirect(u.toString(), 302); };
+// Lands on the calendar setup page (web/src/App.jsx route /setup/calendar; there is no /availability route).
+const back = (origin: string, params: Record<string, string>) => { const u = new URL('/setup/calendar', origin); for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v); return Response.redirect(u.toString(), 302); };
 
 export default async function (req: Request) {
   const redirectUri = functionUrl('msOAuth');
@@ -26,7 +27,7 @@ export default async function (req: Request) {
       if (!msConfigured()) throw new Error('Microsoft 365 is not configured on this platform.');
       if (q.get('error')) throw new Error(String(q.get('error_description') || q.get('error')).slice(0, 200));
       const email = await verifyState(q.get('state') || '');
-      if (!email) throw new Error('The sign-in link expired. Start again from Availability.');
+      if (!email) throw new Error('The sign-in link expired. Start again from Calendar setup.');
       const code = q.get('code') || '';
       if (!code || code.length > 4000) throw new Error('No authorization code was received from Microsoft.');
       const tokens = await msExchangeCode(code, redirectUri);

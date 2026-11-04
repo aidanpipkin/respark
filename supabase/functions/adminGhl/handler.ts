@@ -2,7 +2,7 @@
 import { adminContext } from '../_shared/agentAccess.ts';
 import { failure } from '../_shared/ghl.ts';
 import { platform } from '../_shared/provisioning.ts';
-import { connectionStatus, agencyOAuthToken, redirectUri } from '../_shared/ghlAuth.ts';
+import { connectionStatus, agencyOAuthToken, redirectUri, installUrl } from '../_shared/ghlAuth.ts';
 import { runProvisioning } from '../_shared/provisionCore.ts';
 import { waitUntil, functionUrl } from '../_shared/runtime.ts';
 
@@ -14,9 +14,11 @@ function origin(req: Request) {
 
 export default async function (req: Request) {
   try {
-    const { base44 } = await adminContext(req);
+    const { base44, user } = await adminContext(req);
     const input = await req.json();
     let config = await platform(base44);
+    // The install link carries a signed, 15-minute state that ghlOAuth requires; mint it right before the click.
+    if (input.action === 'install_url') return Response.json({ install_url: await installUrl(config, user.email) });
     if (input.action === 'save') {
       const update: Record<string, any> = {};
       if (input.ghl_client_id !== undefined) { const v = String(input.ghl_client_id).trim(); if (v.length > 200 || /\s/.test(v)) throw new Error('Enter the client ID exactly as shown in GHL.'); update.ghl_client_id = v; }
@@ -48,7 +50,8 @@ export default async function (req: Request) {
     return Response.json({
       status, test, resumed,
       settings: { ghl_client_id: config.ghl_client_id || '', ghl_install_url: config.ghl_install_url || '', self_serve_enabled: config.self_serve_enabled !== false, self_serve_requires_approval: config.self_serve_requires_approval === true },
-      urls: { redirect_uri: redirectUri(o), webhook_url: functionUrl('ghlWebhook') },
+      // install_url is signed and expires in 15 minutes; call { action: 'install_url' } for a fresh one on click.
+      urls: { redirect_uri: redirectUri(o), webhook_url: functionUrl('ghlWebhook'), install_url: config.ghl_install_url && status.client_secret_set ? await installUrl(config, user.email) : '' },
     });
   } catch (error) { return failure(error as Error); }
 }
